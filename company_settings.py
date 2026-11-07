@@ -9,8 +9,8 @@ vale imediatamente em todas as telas.
 """
 
 # ── MARCA / INVOICE ───────────────────────────────────────────────────
-COMPANY_NAME = "Vertex Londe Construction"
-COMPANY_TAGLINE = "CONSTRUCTION"
+COMPANY_NAME = "Vertex Londe Flooring LLC"
+COMPANY_TAGLINE = "FLOORING LLC"
 COMPANY_PHONE = "+00 1234 5678 013"
 COMPANY_EMAIL = "info@vertexlonde.com"
 COMPANY_WEBSITE = "www.vertexlonde.com"
@@ -18,7 +18,7 @@ COMPANY_WEBSITE = "www.vertexlonde.com"
 # Informações bancárias mostradas na área "Payment Info" do invoice.
 COMPANY_BANK_INFO = {
     "account_no": "123456789",
-    "account_name": "Vertex Londe Construction",
+    "account_name": "Vertex Londe Flooring LLC",
     "bank_details": "Your Bank Name — Routing 000000000",
 }
 # Formas de pagamento aceitas, mostradas no invoice.
