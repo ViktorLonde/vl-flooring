@@ -44,6 +44,9 @@ from PySide6.QtGui import QColor, QDesktopServices, QTextCharFormat, QPixmap, QP
 
 from ui_main_window_vl_flooring import Ui_MainWindow
 from passwords import hash_password
+import company_settings
+
+PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Driver MySQL — troque por mysql.connector, pymysql ou PyQt sql conforme seu projeto
 try:
@@ -63,12 +66,8 @@ DB_CONFIG = {
 }
 
 # ── MARCA / INVOICE ───────────────────────────────────────────────────
-# Ajuste esses dados livremente — são usados só na geração dos PDFs de invoice.
-COMPANY_NAME = "Vertex Londe Construction"
-COMPANY_TAGLINE = "CONSTRUCTION"
-COMPANY_PHONE = "+00 1234 5678 013"
-COMPANY_EMAIL = "info@vertexlonde.com"
-COMPANY_WEBSITE = "www.vertexlonde.com"
+# Nome, contatos, dados bancários e SMTP ficam em company_settings.py
+# (são atualizados em tempo de execução pela tela Settings).
 COMPANY_LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "logo_icon_only.png")
 # Se você desenhar seus próprios efeitos de margem (num Canva/Photoshop/Figma,
 # por exemplo), salve como PNG do tamanho de uma página Letter (612x792 pt,
@@ -81,25 +80,6 @@ INVOICE_BACKGROUND_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)
 # Cores extraídas do logo da empresa
 BRAND_NAVY = "#16222D"
 BRAND_ORANGE = "#E8590C"
-
-# Informações bancárias mostradas na área "Payment Info" do invoice.
-COMPANY_BANK_INFO = {
-    "account_no": "123456789",
-    "account_name": "Vertex Londe Construction",
-    "bank_details": "Your Bank Name — Routing 000000000",
-}
-# Formas de pagamento aceitas, mostradas no invoice.
-COMPANY_PAYMENT_METHODS = ["Zelle", "Check", "Cash", "Bank Transfer"]
-
-# ── ENVIO DE INVOICES POR E-MAIL ──────────────────────────────────────
-# Preencha com os dados do seu provedor de e-mail (Gmail, Outlook, etc.)
-# Para Gmail, use uma "App Password" (não a senha normal da conta) —
-# gere em https://myaccount.google.com/apppasswords
-EMAIL_SMTP_HOST = "smtp.gmail.com"
-EMAIL_SMTP_PORT = 587
-EMAIL_SMTP_USER = "your-email@gmail.com"
-EMAIL_SMTP_PASSWORD = "your-app-password"
-EMAIL_FROM_NAME = COMPANY_NAME
 
 # Rótulos amigáveis de status de pagamento mostrados no PDF (o valor salvo no
 # banco continua sendo PENDING/PARTIAL/RECEIVED; isso é só o texto exibido).
@@ -538,7 +518,7 @@ class MainWindow(QMainWindow):
         rows.sort(key=lambda r: -r[0])
         lines += [r[1] for r in rows[:60]] or ["(nenhum)"]
 
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "diagnostico_layout.txt")
+        path = os.path.join(PROJECT_DIR, "diagnostico_layout.txt")
         try:
             with open(path, "w", encoding="utf-8") as f:
                 f.write("\n".join(lines))
@@ -2759,7 +2739,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(dialog)
         lbl_intro = QLabel(
             f"<b>Receipt Inbox</b> — send a photo of a receipt by email to "
-            f"<b>{EMAIL_SMTP_USER}</b> (same account configured in Settings) with the word "
+            f"<b>{company_settings.EMAIL_SMTP_USER}</b> (same account configured in Settings) with the word "
             f"'<b>receipt</b>' or '<b>recibo</b>' somewhere in the subject line. Works from anywhere "
             f"you have cell signal — you only need to be on your network when you open this app to check."
         )
@@ -2793,12 +2773,12 @@ class MainWindow(QMainWindow):
         def imap_connect():
             import imaplib
             imap = imaplib.IMAP4_SSL("imap.gmail.com", 993)
-            imap.login(EMAIL_SMTP_USER, EMAIL_SMTP_PASSWORD)
+            imap.login(company_settings.EMAIL_SMTP_USER, company_settings.EMAIL_SMTP_PASSWORD)
             imap.select("INBOX")
             return imap
 
         def check_inbox():
-            if not EMAIL_SMTP_USER or EMAIL_SMTP_USER == "your-email@gmail.com":
+            if not company_settings.EMAIL_SMTP_USER or company_settings.EMAIL_SMTP_USER == "your-email@gmail.com":
                 QMessageBox.warning(
                     dialog, "Email Not Configured",
                     "Configure your Gmail account in Settings first (same one used to send invoices).",
@@ -2896,7 +2876,7 @@ class MainWindow(QMainWindow):
                 return
             c = found_emails[r]
 
-            receipts_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "receipts_received")
+            receipts_dir = os.path.join(PROJECT_DIR, "receipts_received")
             try:
                 os.makedirs(receipts_dir, exist_ok=True)
                 safe_name = "".join(ch for ch in c["attachment_name"] if ch.isalnum() or ch in "._-") or "receipt"
@@ -3026,7 +3006,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(dialog)
         lbl_intro = QLabel(
             f"<b>Job Site Inbox</b> — from the job site, send an email to "
-            f"<b>{EMAIL_SMTP_USER}</b> (same account configured in Settings) with "
+            f"<b>{company_settings.EMAIL_SMTP_USER}</b> (same account configured in Settings) with "
             f"'<b>endereço</b>', '<b>endereco</b>', '<b>obra</b>' or '<b>job site</b>' somewhere in the "
             f"subject, and the address in the subject or the body. Works from anywhere you have cell "
             f"signal — you only need to be on your network when you open this app to check. Nothing is "
@@ -3068,7 +3048,7 @@ class MainWindow(QMainWindow):
         def imap_connect():
             import imaplib
             imap = imaplib.IMAP4_SSL("imap.gmail.com", 993)
-            imap.login(EMAIL_SMTP_USER, EMAIL_SMTP_PASSWORD)
+            imap.login(company_settings.EMAIL_SMTP_USER, company_settings.EMAIL_SMTP_PASSWORD)
             imap.select("INBOX")
             return imap
 
@@ -3098,7 +3078,7 @@ class MainWindow(QMainWindow):
             return ""
 
         def check_inbox():
-            if not EMAIL_SMTP_USER or EMAIL_SMTP_USER == "your-email@gmail.com":
+            if not company_settings.EMAIL_SMTP_USER or company_settings.EMAIL_SMTP_USER == "your-email@gmail.com":
                 QMessageBox.warning(
                     dialog, "Email Not Configured",
                     "Configure your Gmail account in Settings first (same one used to send invoices).",
@@ -3864,9 +3844,6 @@ class MainWindow(QMainWindow):
         existir algo salvo. Roda cedo no __init__, antes de qualquer invoice
         ser gerado. Se a tabela/linha não existir ainda (primeira vez), os
         valores padrão do código continuam valendo normalmente."""
-        global COMPANY_NAME, COMPANY_TAGLINE, COMPANY_PHONE, COMPANY_EMAIL, COMPANY_WEBSITE
-        global COMPANY_BANK_INFO, COMPANY_PAYMENT_METHODS
-        global EMAIL_SMTP_HOST, EMAIL_SMTP_PORT, EMAIL_SMTP_USER, EMAIL_SMTP_PASSWORD, EMAIL_FROM_NAME
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
@@ -3882,36 +3859,36 @@ class MainWindow(QMainWindow):
             return
         data = dict(zip(columns, row))
 
-        COMPANY_NAME = data.get("COMPANY_NAME") or COMPANY_NAME
-        COMPANY_TAGLINE = data.get("COMPANY_TAGLINE") or COMPANY_TAGLINE
-        COMPANY_PHONE = data.get("COMPANY_PHONE") or COMPANY_PHONE
-        COMPANY_EMAIL = data.get("COMPANY_EMAIL") or COMPANY_EMAIL
-        COMPANY_WEBSITE = data.get("COMPANY_WEBSITE") or COMPANY_WEBSITE
-        COMPANY_BANK_INFO = {
-            "account_no": data.get("BANK_ACCOUNT_NO") or COMPANY_BANK_INFO["account_no"],
-            "account_name": data.get("BANK_ACCOUNT_NAME") or COMPANY_BANK_INFO["account_name"],
-            "bank_details": data.get("BANK_DETAILS") or COMPANY_BANK_INFO["bank_details"],
+        company_settings.COMPANY_NAME = data.get("COMPANY_NAME") or company_settings.COMPANY_NAME
+        company_settings.COMPANY_TAGLINE = data.get("COMPANY_TAGLINE") or company_settings.COMPANY_TAGLINE
+        company_settings.COMPANY_PHONE = data.get("COMPANY_PHONE") or company_settings.COMPANY_PHONE
+        company_settings.COMPANY_EMAIL = data.get("COMPANY_EMAIL") or company_settings.COMPANY_EMAIL
+        company_settings.COMPANY_WEBSITE = data.get("COMPANY_WEBSITE") or company_settings.COMPANY_WEBSITE
+        company_settings.COMPANY_BANK_INFO = {
+            "account_no": data.get("BANK_ACCOUNT_NO") or company_settings.COMPANY_BANK_INFO["account_no"],
+            "account_name": data.get("BANK_ACCOUNT_NAME") or company_settings.COMPANY_BANK_INFO["account_name"],
+            "bank_details": data.get("BANK_DETAILS") or company_settings.COMPANY_BANK_INFO["bank_details"],
         }
         if data.get("PAYMENT_METHODS"):
-            COMPANY_PAYMENT_METHODS = [m.strip() for m in data["PAYMENT_METHODS"].split(",") if m.strip()]
-        EMAIL_SMTP_HOST = data.get("SMTP_HOST") or EMAIL_SMTP_HOST
-        EMAIL_SMTP_PORT = data.get("SMTP_PORT") or EMAIL_SMTP_PORT
-        EMAIL_SMTP_USER = data.get("SMTP_USER") or EMAIL_SMTP_USER
-        EMAIL_SMTP_PASSWORD = data.get("SMTP_PASSWORD") or EMAIL_SMTP_PASSWORD
-        EMAIL_FROM_NAME = data.get("SMTP_FROM_NAME") or EMAIL_FROM_NAME
+            company_settings.COMPANY_PAYMENT_METHODS = [m.strip() for m in data["PAYMENT_METHODS"].split(",") if m.strip()]
+        company_settings.EMAIL_SMTP_HOST = data.get("SMTP_HOST") or company_settings.EMAIL_SMTP_HOST
+        company_settings.EMAIL_SMTP_PORT = data.get("SMTP_PORT") or company_settings.EMAIL_SMTP_PORT
+        company_settings.EMAIL_SMTP_USER = data.get("SMTP_USER") or company_settings.EMAIL_SMTP_USER
+        company_settings.EMAIL_SMTP_PASSWORD = data.get("SMTP_PASSWORD") or company_settings.EMAIL_SMTP_PASSWORD
+        company_settings.EMAIL_FROM_NAME = data.get("SMTP_FROM_NAME") or company_settings.EMAIL_FROM_NAME
 
     def load_settings_form(self):
         """Preenche o formulário de Settings com os valores atuais (já
         carregados do banco no início, ou os padrões do código)."""
-        self.ui.txt_settings_company_name.setText(COMPANY_NAME)
-        self.ui.txt_settings_company_tagline.setText(COMPANY_TAGLINE)
-        self.ui.txt_settings_company_phone.setText(COMPANY_PHONE)
-        self.ui.txt_settings_company_email.setText(COMPANY_EMAIL)
-        self.ui.txt_settings_company_website.setText(COMPANY_WEBSITE)
+        self.ui.txt_settings_company_name.setText(company_settings.COMPANY_NAME)
+        self.ui.txt_settings_company_tagline.setText(company_settings.COMPANY_TAGLINE)
+        self.ui.txt_settings_company_phone.setText(company_settings.COMPANY_PHONE)
+        self.ui.txt_settings_company_email.setText(company_settings.COMPANY_EMAIL)
+        self.ui.txt_settings_company_website.setText(company_settings.COMPANY_WEBSITE)
 
-        self.ui.txt_settings_bank_account_no.setText(COMPANY_BANK_INFO["account_no"])
-        self.ui.txt_settings_bank_account_name.setText(COMPANY_BANK_INFO["account_name"])
-        self.ui.txt_settings_bank_details.setText(COMPANY_BANK_INFO["bank_details"])
+        self.ui.txt_settings_bank_account_no.setText(company_settings.COMPANY_BANK_INFO["account_no"])
+        self.ui.txt_settings_bank_account_name.setText(company_settings.COMPANY_BANK_INFO["account_name"])
+        self.ui.txt_settings_bank_details.setText(company_settings.COMPANY_BANK_INFO["bank_details"])
 
         pm_checks = {
             "Zelle": self.ui.chk_settings_pm_zelle,
@@ -3921,12 +3898,12 @@ class MainWindow(QMainWindow):
             "Credit Card": self.ui.chk_settings_pm_credit_card,
         }
         for label, chk in pm_checks.items():
-            chk.setChecked(label in COMPANY_PAYMENT_METHODS)
+            chk.setChecked(label in company_settings.COMPANY_PAYMENT_METHODS)
 
-        self.ui.txt_settings_smtp_host.setText(EMAIL_SMTP_HOST)
-        self.ui.spn_settings_smtp_port.setValue(int(EMAIL_SMTP_PORT))
-        self.ui.txt_settings_smtp_user.setText(EMAIL_SMTP_USER)
-        self.ui.txt_settings_smtp_password.setText(EMAIL_SMTP_PASSWORD)
+        self.ui.txt_settings_smtp_host.setText(company_settings.EMAIL_SMTP_HOST)
+        self.ui.spn_settings_smtp_port.setValue(int(company_settings.EMAIL_SMTP_PORT))
+        self.ui.txt_settings_smtp_user.setText(company_settings.EMAIL_SMTP_USER)
+        self.ui.txt_settings_smtp_password.setText(company_settings.EMAIL_SMTP_PASSWORD)
 
         if os.path.exists(COMPANY_LOGO_PATH):
             self.ui.lbl_settings_logo_preview.setPixmap(QPixmap(COMPANY_LOGO_PATH))
@@ -3937,9 +3914,6 @@ class MainWindow(QMainWindow):
         """Salva o formulário de Settings no banco (app_settings) e já
         atualiza as constantes em memória, pra valer imediatamente sem
         precisar reiniciar o app."""
-        global COMPANY_NAME, COMPANY_TAGLINE, COMPANY_PHONE, COMPANY_EMAIL, COMPANY_WEBSITE
-        global COMPANY_BANK_INFO, COMPANY_PAYMENT_METHODS
-        global EMAIL_SMTP_HOST, EMAIL_SMTP_PORT, EMAIL_SMTP_USER, EMAIL_SMTP_PASSWORD, EMAIL_FROM_NAME
 
         company_name = self.ui.txt_settings_company_name.text().strip()
         if not company_name:
@@ -4003,22 +3977,22 @@ class MainWindow(QMainWindow):
             return
 
         # Atualiza as constantes em memória pra valer na hora, sem precisar reiniciar
-        COMPANY_NAME = data["COMPANY_NAME"]
-        COMPANY_TAGLINE = data["COMPANY_TAGLINE"]
-        COMPANY_PHONE = data["COMPANY_PHONE"]
-        COMPANY_EMAIL = data["COMPANY_EMAIL"]
-        COMPANY_WEBSITE = data["COMPANY_WEBSITE"]
-        COMPANY_BANK_INFO = {
+        company_settings.COMPANY_NAME = data["COMPANY_NAME"]
+        company_settings.COMPANY_TAGLINE = data["COMPANY_TAGLINE"]
+        company_settings.COMPANY_PHONE = data["COMPANY_PHONE"]
+        company_settings.COMPANY_EMAIL = data["COMPANY_EMAIL"]
+        company_settings.COMPANY_WEBSITE = data["COMPANY_WEBSITE"]
+        company_settings.COMPANY_BANK_INFO = {
             "account_no": data["BANK_ACCOUNT_NO"],
             "account_name": data["BANK_ACCOUNT_NAME"],
             "bank_details": data["BANK_DETAILS"],
         }
-        COMPANY_PAYMENT_METHODS = selected_methods
-        EMAIL_SMTP_HOST = data["SMTP_HOST"]
-        EMAIL_SMTP_PORT = data["SMTP_PORT"]
-        EMAIL_SMTP_USER = data["SMTP_USER"]
-        EMAIL_SMTP_PASSWORD = data["SMTP_PASSWORD"]
-        EMAIL_FROM_NAME = data["SMTP_FROM_NAME"]
+        company_settings.COMPANY_PAYMENT_METHODS = selected_methods
+        company_settings.EMAIL_SMTP_HOST = data["SMTP_HOST"]
+        company_settings.EMAIL_SMTP_PORT = data["SMTP_PORT"]
+        company_settings.EMAIL_SMTP_USER = data["SMTP_USER"]
+        company_settings.EMAIL_SMTP_PASSWORD = data["SMTP_PASSWORD"]
+        company_settings.EMAIL_FROM_NAME = data["SMTP_FROM_NAME"]
 
         QMessageBox.information(self, "Saved", "Settings saved successfully.")
 
@@ -7295,9 +7269,9 @@ class MainWindow(QMainWindow):
         txt_message = QTextEdit()
         txt_message.setPlainText(
             f"Hi {{entity_name}},\n\n"
-            f"Please find attached your invoice from {COMPANY_NAME} for the period "
+            f"Please find attached your invoice from {company_settings.COMPANY_NAME} for the period "
             f"{{period_from}} to {{period_to}}, totaling ${{total_amount}}.\n\n"
-            f"Thank you for your business!\n{COMPANY_NAME}"
+            f"Thank you for your business!\n{company_settings.COMPANY_NAME}"
         )
         txt_message.setMinimumHeight(160)
         layout.addWidget(txt_message)
@@ -7350,16 +7324,16 @@ class MainWindow(QMainWindow):
                     else:
                         try:
                             msg = EmailMessage()
-                            msg["Subject"] = f"Invoice from {COMPANY_NAME}"
-                            msg["From"] = f"{EMAIL_FROM_NAME} <{EMAIL_SMTP_USER}>"
+                            msg["Subject"] = f"Invoice from {company_settings.COMPANY_NAME}"
+                            msg["From"] = f"{company_settings.EMAIL_FROM_NAME} <{company_settings.EMAIL_SMTP_USER}>"
                             msg["To"] = item["email"]
                             msg.set_content(message_body)
                             with open(item["pdf_path"], "rb") as f:
                                 msg.add_attachment(f.read(), maintype="application", subtype="pdf",
                                                     filename=os.path.basename(item["pdf_path"]))
-                            with smtplib.SMTP(EMAIL_SMTP_HOST, EMAIL_SMTP_PORT) as server:
+                            with smtplib.SMTP(company_settings.EMAIL_SMTP_HOST, company_settings.EMAIL_SMTP_PORT) as server:
                                 server.starttls()
-                                server.login(EMAIL_SMTP_USER, EMAIL_SMTP_PASSWORD)
+                                server.login(company_settings.EMAIL_SMTP_USER, company_settings.EMAIL_SMTP_PASSWORD)
                                 server.send_message(msg)
                             email_ok += 1
                         except Exception as e:
@@ -8408,7 +8382,7 @@ class MainWindow(QMainWindow):
             doc = SimpleDocTemplate(path, pagesize=letter, topMargin=0.6 * inch, bottomMargin=0.6 * inch,
                                      leftMargin=0.6 * inch, rightMargin=0.6 * inch)
             story = [
-                Paragraph(f"<b>{COMPANY_NAME}</b>", styles["Title"]),
+                Paragraph(f"<b>{company_settings.COMPANY_NAME}</b>", styles["Title"]),
                 Paragraph(f"<b>1099-NEC Report</b> — Tax Year {year_name}", styles["Heading2"]),
                 Spacer(1, 6),
                 Paragraph(
@@ -8539,7 +8513,7 @@ class MainWindow(QMainWindow):
             doc = SimpleDocTemplate(path, pagesize=letter, topMargin=0.6 * inch, bottomMargin=0.6 * inch,
                                      leftMargin=0.6 * inch, rightMargin=0.6 * inch)
             story = [
-                Paragraph(f"<b>{COMPANY_NAME}</b>", styles["Title"]),
+                Paragraph(f"<b>{company_settings.COMPANY_NAME}</b>", styles["Title"]),
                 Paragraph(f"<b>Sales Summary</b> — {month_name} {year_name}", styles["Heading2"]),
                 Spacer(1, 14),
             ]
@@ -8639,7 +8613,7 @@ class MainWindow(QMainWindow):
             doc = SimpleDocTemplate(path, pagesize=letter, topMargin=0.6 * inch, bottomMargin=0.6 * inch,
                                      leftMargin=0.7 * inch, rightMargin=0.7 * inch)
             story = [
-                Paragraph(f"<b>{COMPANY_NAME}</b>", styles["Title"]),
+                Paragraph(f"<b>{company_settings.COMPANY_NAME}</b>", styles["Title"]),
                 Paragraph(f"<b>Profit &amp; Loss Statement</b> — {month_name} {year_name}", styles["Heading2"]),
                 Spacer(1, 14),
                 Paragraph(
@@ -9048,7 +9022,7 @@ class MainWindow(QMainWindow):
         pay_row2 = QHBoxLayout()
         pay_row2.addWidget(QLabel("Method:"))
         cmb_method = QComboBox()
-        cmb_method.addItems(COMPANY_PAYMENT_METHODS + ["Other"])
+        cmb_method.addItems(company_settings.COMPANY_PAYMENT_METHODS + ["Other"])
         pay_row2.addWidget(cmb_method)
         layout.addLayout(pay_row2)
 
@@ -9465,7 +9439,7 @@ class MainWindow(QMainWindow):
         new_payment_row2 = QHBoxLayout()
         new_payment_row2.addWidget(QLabel("Method:"))
         cmb_method = QComboBox()
-        cmb_method.addItems(COMPANY_PAYMENT_METHODS + ["Other"])
+        cmb_method.addItems(company_settings.COMPANY_PAYMENT_METHODS + ["Other"])
         new_payment_row2.addWidget(cmb_method)
         layout.addLayout(new_payment_row2)
 
@@ -10038,7 +10012,7 @@ class MainWindow(QMainWindow):
             else:
                 logo_cell = Paragraph("", styles["Normal"])
 
-            company_html = f"<b>{COMPANY_NAME}</b><br/><font size=7 color='{BRAND_ORANGE}'>{COMPANY_TAGLINE}</font>"
+            company_html = f"<b>{company_settings.COMPANY_NAME}</b><br/><font size=7 color='{BRAND_ORANGE}'>{company_settings.COMPANY_TAGLINE}</font>"
             company_block = Table([[logo_cell, Paragraph(company_html, styles["Normal"])]],
                                    colWidths=[0.65 * inch, 2.8 * inch])
             company_block.setStyle(TableStyle([
@@ -10153,11 +10127,11 @@ class MainWindow(QMainWindow):
         # ── Payment Info + status ──
         bank_html = "<br/>".join([
             "<b>Payment Info:</b>",
-            f"Account No: {COMPANY_BANK_INFO['account_no']}",
-            f"A/C Name: {COMPANY_BANK_INFO['account_name']}",
-            f"Bank Details: {COMPANY_BANK_INFO['bank_details']}",
+            f"Account No: {company_settings.COMPANY_BANK_INFO['account_no']}",
+            f"A/C Name: {company_settings.COMPANY_BANK_INFO['account_name']}",
+            f"Bank Details: {company_settings.COMPANY_BANK_INFO['bank_details']}",
             "<br/><b>Accepted Methods:</b>",
-            ", ".join(COMPANY_PAYMENT_METHODS),
+            ", ".join(company_settings.COMPANY_PAYMENT_METHODS),
         ])
         status_color_map = {"PENDING": "#E65100", "PARTIAL": "#1565C0", "RECEIVED": "#2E7D32"}
         status_color = status_color_map.get(status, BRAND_NAVY)
@@ -10176,7 +10150,7 @@ class MainWindow(QMainWindow):
         story.append(HRFlowable(width="100%", thickness=0.75, color=colors.HexColor("#DDDDDD")))
         story.append(Spacer(1, 8))
         story.append(Paragraph(
-            f"<font size=8 color='#6B7C93'>{COMPANY_PHONE} &nbsp;|&nbsp; {COMPANY_EMAIL} &nbsp;|&nbsp; {COMPANY_WEBSITE}</font>",
+            f"<font size=8 color='#6B7C93'>{company_settings.COMPANY_PHONE} &nbsp;|&nbsp; {company_settings.COMPANY_EMAIL} &nbsp;|&nbsp; {company_settings.COMPANY_WEBSITE}</font>",
             styles["Normal"],
         ))
         story.append(Paragraph("<font size=8 color='#6B7C93'>Thank you for your business with us.</font>",
