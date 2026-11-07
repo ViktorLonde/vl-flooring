@@ -1,0 +1,24 @@
+# Credenciais do banco (use db_config.example.ini como modelo)
+db_config.ini
+
+# Ambiente Python
+venv/
+__pycache__/
+*.pyc
+
+# Arquivos gerados pelo app (invoices, relatórios, exports)
+invoices/
+/*.pdf
+/*.xlsx
+diagnostico_layout.txt
+layout_debug.txt/
+
+# Material de referência (contém credenciais antigas)
+modelos/
+
+# Temporários e backups manuais (o Git substitui os .bak)
+~*.tmp
+~$*
+*.bak*
+*.py2
+Novo(a) Text Document.txt

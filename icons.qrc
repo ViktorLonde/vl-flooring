@@ -1,0 +1,25 @@
+<RCC>
+  <qresource prefix="icons">
+    <file>icons_/eye_closed.png</file>
+    <file>icons_/eye_open.png</file>
+    <file>icons_/olho abero e fechado preto 24x24.png</file>
+    <file>icons_/olho aberto 24x24.png</file>
+    <file>icons_/olho aberto e fechado brando 24x24.png</file>
+    <file>icons_/create_user.png</file>
+    <file>icons_/create_user_preta.png</file>
+    <file>icons_/email.png</file>
+    <file>icons_/icon_home.png</file>
+    <file>icons_/icon_job_records.png</file>
+    <file>icons_/icon_sem_fundo.png</file>
+    <file>icons_/icon_user.png</file>
+    <file>icons_/Imagem_Cosntrucao.jpg</file>
+    <file>icons_/Logo_VL_Floorring_Branco.png</file>
+    <file>icons_/logo4.png</file>
+    <file>icons_/menu.png</file>
+    <file>icons_/menu1.png</file>
+    <file>icons_/menu2.png</file>
+    <file>icons_/Tela_Login.jpg</file>
+    <file>icons_/whatsApp.png</file>
+    <file>icons_/Youtube.png</file>
+  </qresource>
+</RCC>
