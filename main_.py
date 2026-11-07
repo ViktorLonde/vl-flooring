@@ -43,6 +43,7 @@ except ImportError:
 from PySide6.QtGui import QColor, QDesktopServices, QTextCharFormat, QPixmap, QPainter, QBrush, QShortcut, QKeySequence
 
 from ui_main_window_vl_flooring import Ui_MainWindow
+from passwords import hash_password
 
 # Driver MySQL — troque por mysql.connector, pymysql ou PyQt sql conforme seu projeto
 try:
@@ -11140,7 +11141,7 @@ class MainWindow(QMainWindow):
         }
 
         if password:
-            data["password_hash"] = hashlib.sha256(password.encode()).hexdigest()
+            data["password_hash"] = hash_password(password)
 
         try:
             conn = self._get_connection()

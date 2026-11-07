@@ -8,6 +8,7 @@ from PySide6.QtGui import QIcon
 from login_window import Ui_Login
 from PySide6.QtCore import Signal
 from config import load_db_config
+from passwords import hash_password, verify_password, needs_upgrade
 
 class LoginWindow(QMainWindow, Ui_Login):
     
@@ -59,25 +60,35 @@ class LoginWindow(QMainWindow, Ui_Login):
             QMessageBox.warning(self, "Error", "Please fill in username and password." ) #"Erro", "Preencha usuário e senha."
             return
 
-        password_hash = hashlib.sha256(password.encode()).hexdigest()
-
         try:
             conn = mysql.connector.connect(**load_db_config())
             cursor = conn.cursor()
 
-            sql = "SELECT id FROM users WHERE username=%s AND password_hash=%s"
-            cursor.execute(sql, (user, password_hash))
+            sql = "SELECT id, password_hash, status FROM users WHERE username=%s"
+            cursor.execute(sql, (user,))
             resultado = cursor.fetchone()
 
-            #if resultado:
-            # QMessageBox.information(self, "Sucesso", "Login realizado!")
-            # else:
-            #     QMessageBox.warning(self, "Erro", "Usuário ou senha incorretos.")
-            if resultado:
-                self.login_successful.emit(user) # envia o nome do usuário para a main window
-                #self.close()             # fecha a tela de login 
+            if not resultado or not verify_password(password, resultado[1]):
+                QMessageBox.warning(self, "Error", "Incorrect username or password.")
+                return
+
+            user_id, stored_hash, status = resultado
+            if status and status != "Active":
+                QMessageBox.warning(self, "Error", f"This user is {status}. Contact an administrator.")
+                return
+
+            # Converte hashes antigos (SHA-256 sem salt) pro formato seguro
+            # e registra o último login
+            if needs_upgrade(stored_hash):
+                cursor.execute("UPDATE users SET password_hash=%s, last_login=NOW() WHERE id=%s",
+                               (hash_password(password), user_id))
             else:
-             QMessageBox.warning(self, "Error", "Incorrect username or password.")
+                cursor.execute("UPDATE users SET last_login=NOW() WHERE id=%s", (user_id,))
+            conn.commit()
+            cursor.close()
+            conn.close()
+
+            self.login_successful.emit(user) # envia o nome do usuário para a main window
 
 
         except Exception as e:
