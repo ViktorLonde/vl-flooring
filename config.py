@@ -27,3 +27,18 @@ def load_db_config() -> dict:
         "password": section.get("password", ""),
         "database": section.get("database"),
     }
+
+
+def check_db_connection(cfg: dict, timeout: int = 5) -> str | None:
+    """Tenta conectar rapidamente. Retorna None se deu certo ou a mensagem de erro.
+
+    Sem esse teste, com o notebook (servidor MySQL) desligado, cada tentativa
+    de conexão demora ~21s e o app parece travado ao abrir.
+    """
+    import mysql.connector
+    try:
+        conn = mysql.connector.connect(**cfg, connection_timeout=timeout)
+        conn.close()
+        return None
+    except mysql.connector.Error as e:
+        return str(e)

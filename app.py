@@ -9,9 +9,9 @@ Para rodar:
 
 import sys
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
-from config import load_db_config
+from config import load_db_config, check_db_connection
 from login import LoginWindow
 from main_ import MainWindow
 
@@ -33,6 +33,31 @@ def on_login_successful(login_window: LoginWindow, main_window: MainWindow, user
     login_window.deleteLater()
 
 
+def wait_for_database() -> bool:
+    """Confere se o banco responde antes de abrir as telas. Se não responder,
+    explica o motivo provável e deixa tentar de novo. Retorna False se o
+    usuário preferir fechar o app."""
+    while True:
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        error = check_db_connection(DB_CONFIG)
+        QApplication.restoreOverrideCursor()
+        if error is None:
+            return True
+
+        box = QMessageBox(QMessageBox.Icon.Warning, "VL Flooring — sem conexão",
+                          f"Não foi possível conectar ao banco de dados em {DB_CONFIG['host']}.\n\n"
+                          "Verifique se:\n"
+                          "  • o notebook (servidor MySQL) está ligado;\n"
+                          "  • este computador está na mesma rede Wi-Fi;\n"
+                          "  • o IP do notebook não mudou (db_config.ini).")
+        box.setDetailedText(error)
+        retry = box.addButton("Tentar de novo", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("Fechar", QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        if box.clickedButton() is not retry:
+            return False
+
+
 def main():
     # Faz o Qt escalar corretamente em telas com DPI diferentes
     # (laptop 15" vs monitor 32") — precisa ser ANTES do QApplication(...)
@@ -41,6 +66,9 @@ def main():
     )
 
     app = QApplication(sys.argv)
+
+    if not wait_for_database():
+        sys.exit(1)
 
     main_window = MainWindow(db_config=DB_CONFIG)
     main_window.hide()
