@@ -182,11 +182,27 @@ class JobsMixin:
                     w.setEnabled(checked)
             return handler
 
+        def make_clear_handler(widgets):
+            """Quando o USUÁRIO desmarca a categoria (clicked, não toggled —
+            carregar um job não apaga nada), limpa o que estava escolhido nela."""
+            def handler(checked):
+                if checked:
+                    return
+                for w in widgets:
+                    if isinstance(w, QComboBox):
+                        w.setCurrentIndex(0)
+                    elif isinstance(w, QDoubleSpinBox):
+                        w.setValue(1)
+            return handler
+
         self._category_lock_handlers = []  # mantém referência viva
         for checkbox, widgets in groups.items():
             handler = make_toggle_handler(widgets)
             checkbox.toggled.connect(handler)
             self._category_lock_handlers.append(handler)
+            clear_handler = make_clear_handler(widgets)
+            checkbox.clicked.connect(clear_handler)
+            self._category_lock_handlers.append(clear_handler)
             # Aplica o estado inicial (desmarcado = bloqueado)
             handler(checkbox.isChecked())
 
@@ -1235,6 +1251,42 @@ class JobsMixin:
         self._loading_job_form = False
         self._job_form_dirty = False
 
+    # Campos de Client Info / Job Info que são do projeto (iguais em todos os
+    # dias do mesmo Job Code). Work Date, Status, Value, Note, Helper e Work
+    # Types ficam de fora: mudam de um dia pro outro.
+    _JOB_CODE_SHARED_FIELDS = ("CLIENT_ID", "COMPANY_ID", "CONTRACTOR_ID", "PAYMENT_METHOD",
+                               "JOB_ADDRESS", "JOB_ADDRESS2", "CITY_ID", "STATE_ID", "ZIP_CODE")
+
+    def _job_code_shared_changes(self, cursor, data, job_project_id):
+        """Campos compartilhados que o usuário mudou neste save, comparando com
+        o que este dia tinha antes (ou, num dia novo, com os dados que o Job
+        Code já tinha). Só valores preenchidos são propagados; comparar com o
+        próprio dia evita que salvar um dia antigo desfaça correções feitas
+        nos outros dias."""
+        if not job_project_id:
+            return {}
+        cols = ", ".join(self._JOB_CODE_SHARED_FIELDS)
+        baseline = None
+        if self._current_job_id:
+            cursor.execute(f"SELECT JOB_PROJECT_ID, {cols} FROM work_days WHERE ID = %s", (self._current_job_id,))
+            row = cursor.fetchone()
+            if row and row[0] == job_project_id:
+                baseline = row[1:]
+        if baseline is None:
+            cursor.execute(f"SELECT {cols} FROM work_days WHERE JOB_PROJECT_ID = %s ORDER BY ID DESC",
+                           (job_project_id,))
+            rows = cursor.fetchall()
+            if not rows:
+                return {}  # primeiro dia do código: não há outros pra atualizar
+            baseline = [next((r[i] for r in rows if r[i] not in (None, "")), None)
+                        for i in range(len(self._JOB_CODE_SHARED_FIELDS))]
+
+        def norm(v):
+            return "" if v is None else str(v).strip().upper()
+
+        return {field: data[field] for field, old in zip(self._JOB_CODE_SHARED_FIELDS, baseline)
+                if data.get(field) not in (None, "") and norm(data[field]) != norm(old)}
+
     def save_job_record(self):
         """Insere ou atualiza um registro em work_days."""
         # Work Date e Contractor são obrigatórios — não deixar salvar sem eles.
@@ -1355,6 +1407,10 @@ class JobsMixin:
 
             data["CLIENT_ID"] = client_id
 
+            # Dados do projeto que o usuário mudou neste dia (endereço, cliente,
+            # company...) valem pra todos os outros dias do mesmo Job Code.
+            shared_changes = self._job_code_shared_changes(cursor, data, job_project_id)
+
             if self._current_job_id:
                 set_clause = ", ".join(f"{k} = %s" for k in data)
                 query = f"UPDATE work_days SET {set_clause} WHERE ID = %s"
@@ -1364,6 +1420,23 @@ class JobsMixin:
                 placeholders = ", ".join(["%s"] * len(data))
                 query = f"INSERT INTO work_days ({cols}) VALUES ({placeholders})"
                 cursor.execute(query, list(data.values()))
+            saved_job_id = self._current_job_id or cursor.lastrowid
+
+            other_days_updated = 0
+            if shared_changes:
+                set_clause = ", ".join(f"{k} = %s" for k in shared_changes)
+                cursor.execute(
+                    f"UPDATE work_days SET {set_clause} WHERE JOB_PROJECT_ID = %s AND ID <> %s",
+                    list(shared_changes.values()) + [job_project_id, saved_job_id],
+                )
+                other_days_updated = cursor.rowcount
+                project_cols = {k: v for k, v in shared_changes.items()
+                                if k in ("CLIENT_ID", "COMPANY_ID", "CONTRACTOR_ID", "JOB_ADDRESS", "CITY_ID", "STATE_ID")}
+                if project_cols:
+                    cursor.execute(
+                        "UPDATE job_projects SET " + ", ".join(f"{k} = %s" for k in project_cols) + " WHERE ID = %s",
+                        list(project_cols.values()) + [job_project_id],
+                    )
 
             conn.commit()
             cursor.close()
@@ -1415,7 +1488,16 @@ class JobsMixin:
             except (MySQLError, RuntimeError):
                 pass  # não bloqueia o fluxo de salvar o job por causa disso
 
-        QMessageBox.information(self, "Success", "Job record saved successfully.")
+        if other_days_updated:
+            labels = {"CLIENT_ID": "Client", "COMPANY_ID": "Company", "CONTRACTOR_ID": "Contractor",
+                      "PAYMENT_METHOD": "Payment Method", "JOB_ADDRESS": "Address", "JOB_ADDRESS2": "Address 2",
+                      "CITY_ID": "City", "STATE_ID": "State", "ZIP_CODE": "ZIP Code"}
+            QMessageBox.information(
+                self, "Success",
+                f"Job record saved successfully.\n\nAlso updated {other_days_updated} other day(s) of "
+                f"{job_code_text}: {', '.join(labels[k] for k in shared_changes)}.")
+        else:
+            QMessageBox.information(self, "Success", "Job record saved successfully.")
 
         if is_new_client:
             QMessageBox.information(
