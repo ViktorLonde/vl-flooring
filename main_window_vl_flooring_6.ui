@@ -2261,7 +2261,7 @@ QDateEdit::drop-down { border: none; width: 22px; }</string>
                          <number>0</number>
                         </property>
                         <property name="topMargin">
-                         <number>0</number>
+                         <number>24</number>
                         </property>
                         <property name="rightMargin">
                          <number>0</number>
@@ -2279,7 +2279,7 @@ QDateEdit::drop-down { border: none; width: 22px; }</string>
                             <number>0</number>
                            </property>
                            <property name="topMargin">
-                            <number>20</number>
+                            <number>0</number>
                            </property>
                            <property name="rightMargin">
                             <number>0</number>
