@@ -730,14 +730,23 @@ class JobsMixin:
             cursor.execute(
                 "SELECT CLIENT_ID, COMPANY_ID, CONTRACTOR_ID, JOB_ADDRESS, JOB_ADDRESS2, "
                 f"CITY_ID, STATE_ID, ZIP_CODE, PAYMENT_METHOD{helper_col_sql}, {work_type_id_cols}, {work_type_qty_cols} "
-                "FROM work_days WHERE JOB_PROJECT_ID = %s ORDER BY ID DESC LIMIT 1",
+                "FROM work_days WHERE JOB_PROJECT_ID = %s ORDER BY ID DESC",
                 (job_id,),
             )
-            row = cursor.fetchone()
+            rows = cursor.fetchall()
             cursor.close()
             conn.close()
         except (MySQLError, RuntimeError):
-            row = None
+            rows = []
+
+        # Cada campo de cliente/endereço/company vem do job mais recente que o
+        # tem preenchido (ex.: o último dia salvo sem ZIP, mas um anterior com).
+        # Work Types ficam só do job mais recente, pra não misturar dias.
+        n_head = 10 if has_helper_col else 9
+        row = None
+        if rows:
+            head = [next((r[i] for r in rows if r[i] not in (None, "")), None) for i in range(n_head)]
+            row = tuple(head) + tuple(rows[0][n_head:])
 
         self._update_days_worked_label()
 
