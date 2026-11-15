@@ -570,6 +570,18 @@ class JobsMixin:
     def _reset_job_code_autofill_guard(self, _text=None):
         self._job_code_autofill_handled = None
 
+    def _resolve_partial_job_code(self, typed):
+        """Devolve o código completo se o texto digitado identifica um único
+        código existente: só o número ("32" -> JB-0032) ou um pedaço do código."""
+        if not typed:
+            return None
+        if typed.isdigit():
+            matches = [code for code in self._job_code_to_id
+                       if code.rsplit("-", 1)[-1].isdigit() and int(code.rsplit("-", 1)[-1]) == int(typed)]
+        else:
+            matches = [code for code in self._job_code_to_id if typed in code]
+        return matches[0] if len(matches) == 1 else None
+
     def _refresh_job_code_completer(self):
         """Recarrega a lista de códigos de projeto existentes (autocomplete)."""
         try:
@@ -690,6 +702,13 @@ class JobsMixin:
             return
         typed = self.ui.cmb_job_code.currentText().strip().upper()
         job_id = self._job_code_to_id.get(typed)
+        if not job_id:
+            # Aceita o código abreviado ("32" ou "0032" -> "JB-0032") quando
+            # só um código existente combina
+            full_code = self._resolve_partial_job_code(typed)
+            if full_code:
+                self.ui.cmb_job_code.setEditText(full_code)
+                typed, job_id = full_code, self._job_code_to_id[full_code]
         if not job_id:
             self._update_days_worked_label()
             return
