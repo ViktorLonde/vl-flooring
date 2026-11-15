@@ -558,6 +558,18 @@ class JobsMixin:
         self._job_code_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self.ui.cmb_job_code.setCompleter(self._job_code_completer)
 
+        # Clicar numa sugestão não dispara editingFinished (só Enter ou sair do
+        # campo), então o preenchimento automático só acontecia depois. Agora
+        # dispara na hora da escolha; o guard evita perguntar de novo quando o
+        # usuário sair do campo em seguida com o mesmo código.
+        self._job_code_autofill_handled = None
+        self._job_code_completer.activated[str].connect(
+            lambda _text: QTimer.singleShot(0, self._on_job_code_editing_finished))
+        self.ui.cmb_job_code.lineEdit().textChanged.connect(self._reset_job_code_autofill_guard)
+
+    def _reset_job_code_autofill_guard(self, _text=None):
+        self._job_code_autofill_handled = None
+
     def _refresh_job_code_completer(self):
         """Recarrega a lista de códigos de projeto existentes (autocomplete)."""
         try:
@@ -681,6 +693,9 @@ class JobsMixin:
         if not job_id:
             self._update_days_worked_label()
             return
+        if typed == self._job_code_autofill_handled:
+            return  # já tratado ao escolher a sugestão
+        self._job_code_autofill_handled = typed
 
         work_type_id_cols = ", ".join(f"{p}_ID" for p in self._WORK_TYPE_FIELD_PREFIXES)
         work_type_qty_cols = ", ".join(f"{p}_QTY" for p in self._WORK_TYPE_FIELD_PREFIXES)

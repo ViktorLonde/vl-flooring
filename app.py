@@ -7,7 +7,14 @@ Para rodar:
     python app.py
 """
 
+import os
 import sys
+
+# Os ícones da tela (Icons_/..., logo) são carregados com caminho relativo à
+# pasta atual. Sem isso, abrir o app a partir de outra pasta (ex.: VS Code
+# aberto em D:\) deixava a sidebar sem ícones.
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QMessageBox
 
