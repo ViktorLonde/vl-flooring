@@ -2315,317 +2315,317 @@ QDateEdit::drop-down { border: none; width: 22px; }</string>
                              </layout>
                             </widget>
                            </item>
-                          </layout>
-                         </widget>
-                        </item>
-                        <item>
-                         <widget class="QFrame" name="frame_job_info_body">
-                          <property name="styleSheet">
-                           <string notr="true">QFrame#frame_job_info_body { border-top-left-radius:0px; border-top-right-radius:0px; border-bottom-left-radius:10px; border-bottom-right-radius:10px; }</string>
-                          </property>
-                          <layout class="QGridLayout" name="grid_job_info">
-                           <property name="leftMargin">
-                            <number>20</number>
-                           </property>
-                           <property name="topMargin">
-                            <number>16</number>
-                           </property>
-                           <property name="rightMargin">
-                            <number>26</number>
-                           </property>
-                           <property name="bottomMargin">
-                            <number>24</number>
-                           </property>
-                           <property name="horizontalSpacing">
-                            <number>12</number>
-                           </property>
-                           <property name="verticalSpacing">
-                            <number>8</number>
-                           </property>
-                           <item row="0" column="0">
-                            <widget class="QLabel" name="lbl_work_date">
-                             <property name="text">
-                              <string>WORK DATE</string>
-                             </property>
-                            </widget>
-                           </item>
-                           <item row="0" column="1">
-                            <widget class="QLabel" name="lbl_job_code">
-                             <property name="text">
-                              <string>JOB CODE</string>
-                             </property>
-                            </widget>
-                           </item>
-                           <item row="0" column="3">
-                            <widget class="QLabel" name="lbl_payment">
-                             <property name="text">
-                              <string>PAYMENT METHOD</string>
-                             </property>
-                            </widget>
-                           </item>
-                           <item row="1" column="0">
-                            <widget class="QDateEdit" name="date_work_date">
-                             <property name="minimumSize">
-                              <size>
-                               <width>140</width>
-                               <height>36</height>
-                              </size>
-                             </property>
-                             <property name="maximumSize">
-                              <size>
-                               <width>140</width>
-                               <height>36</height>
-                              </size>
-                             </property>
+                           <item>
+                            <widget class="QFrame" name="frame_job_info_body">
                              <property name="styleSheet">
-                              <string notr="true">font: 9pt &quot;MS Shell Dlg 2&quot;;</string>
+                              <string notr="true">QFrame#frame_job_info_body { border-top-left-radius:0px; border-top-right-radius:0px; border-bottom-left-radius:10px; border-bottom-right-radius:10px; }</string>
                              </property>
-                             <property name="displayFormat">
-                              <string>MM/dd/yyyy</string>
-                             </property>
-                             <property name="calendarPopup">
-                              <bool>true</bool>
-                             </property>
-                            </widget>
-                           </item>
-                           <item row="1" column="1" colspan="2">
-                            <layout class="QHBoxLayout" name="layout_job_code_field_row">
-                             <property name="spacing">
-                              <number>8</number>
-                             </property>
-                             <item>
-                              <widget class="QComboBox" name="cmb_job_code">
-                               <property name="minimumSize">
-                                <size>
-                                 <width>160</width>
-                                 <height>46</height>
-                                </size>
-                               </property>
-                               <property name="toolTip">
-                                <string>Type or pick an existing job code — links multiple work days under the same project</string>
-                               </property>
-                               <property name="editable">
-                                <bool>true</bool>
-                               </property>
-                               <property name="insertPolicy">
-                                <enum>QComboBox::NoInsert</enum>
-                               </property>
-                              </widget>
-                             </item>
-                             <item>
-                              <widget class="QPushButton" name="btn_generate_job_code">
-                               <property name="minimumSize">
-                                <size>
-                                 <width>0</width>
-                                 <height>36</height>
-                                </size>
-                               </property>
-                               <property name="cursor">
-                                <cursorShape>PointingHandCursor</cursorShape>
-                               </property>
-                               <property name="styleSheet">
-                                <string notr="true">QPushButton { background-color: #37474F; color: #FFFFFF; border: none; border-radius: 6px; padding: 0 14px; font-size: 12px; font-weight: 600; } QPushButton:hover { background-color: #546E7A; }</string>
-                               </property>
-                               <property name="text">
-                                <string>+ Generate Code</string>
-                               </property>
-                              </widget>
-                             </item>
-                             <item>
-                              <widget class="QLabel" name="lbl_days_worked_value">
-                               <property name="minimumSize">
-                                <size>
-                                 <width>0</width>
-                                 <height>30</height>
-                                </size>
-                               </property>
-                               <property name="styleSheet">
-                                <string notr="true">font-size:16px; font-weight:800; color:#1565C0; background:transparent;</string>
-                               </property>
-                               <property name="text">
-                                <string>—</string>
-                               </property>
-                              </widget>
-                             </item>
-                            </layout>
-                           </item>
-                           <item row="1" column="3">
-                            <widget class="QComboBox" name="cmb_payment">
-                             <property name="minimumSize">
-                              <size>
-                               <width>140</width>
-                               <height>46</height>
-                              </size>
-                             </property>
-                             <property name="maximumSize">
-                              <size>
-                               <width>140</width>
-                               <height>36</height>
-                              </size>
-                             </property>
-                             <property name="styleSheet">
-                              <string notr="true">font: 9pt &quot;MS Shell Dlg 2&quot;;</string>
-                             </property>
-                             <item>
-                              <property name="text">
-                               <string>Receivable</string>
+                             <layout class="QGridLayout" name="grid_job_info">
+                              <property name="leftMargin">
+                               <number>20</number>
                               </property>
-                             </item>
-                             <item>
-                              <property name="text">
-                               <string>Paid</string>
+                              <property name="topMargin">
+                               <number>16</number>
                               </property>
-                             </item>
-                            </widget>
-                           </item>
-                           <item row="2" column="0">
-                            <widget class="QLabel" name="lbl_contractor">
-                             <property name="text">
-                              <string>CONTRACTOR</string>
-                             </property>
-                            </widget>
-                           </item>
-                           <item row="2" column="1">
-                            <widget class="QLabel" name="lbl_company_form">
-                             <property name="text">
-                              <string>COMPANY</string>
-                             </property>
-                            </widget>
-                           </item>
-                           <item row="2" column="2">
-                            <widget class="QLabel" name="lbl_status_form">
-                             <property name="text">
-                              <string>STATUS</string>
-                             </property>
-                            </widget>
-                           </item>
-                           <item row="2" column="3">
-                            <widget class="QLabel" name="lbl_value">
-                             <property name="text">
-                              <string>VALUE ($)</string>
-                             </property>
-                            </widget>
-                           </item>
-                           <item row="3" column="0">
-                            <widget class="QComboBox" name="cmb_contractor">
-                             <property name="minimumSize">
-                              <size>
-                               <width>190</width>
-                               <height>46</height>
-                              </size>
-                             </property>
-                             <property name="maximumSize">
-                              <size>
-                               <width>190</width>
-                               <height>36</height>
-                              </size>
-                             </property>
-                             <property name="styleSheet">
-                              <string notr="true">font: 9pt &quot;MS Shell Dlg 2&quot;;</string>
-                             </property>
-                            </widget>
-                           </item>
-                           <item row="3" column="1">
-                            <widget class="QComboBox" name="cmb_company_form">
-                             <property name="minimumSize">
-                              <size>
-                               <width>190</width>
-                               <height>46</height>
-                              </size>
-                             </property>
-                             <property name="maximumSize">
-                              <size>
-                               <width>190</width>
-                               <height>36</height>
-                              </size>
-                             </property>
-                             <property name="styleSheet">
-                              <string notr="true">font: 9pt &quot;MS Shell Dlg 2&quot;;</string>
-                             </property>
-                            </widget>
-                           </item>
-                           <item row="3" column="2">
-                            <widget class="QComboBox" name="cmb_status_form">
-                             <property name="minimumSize">
-                              <size>
-                               <width>150</width>
-                               <height>46</height>
-                              </size>
-                             </property>
-                             <property name="maximumSize">
-                              <size>
-                               <width>100</width>
-                               <height>36</height>
-                              </size>
-                             </property>
-                             <property name="styleSheet">
-                              <string notr="true">font: 9pt &quot;MS Shell Dlg 2&quot;;</string>
-                             </property>
-                             <item>
-                              <property name="text">
-                               <string>PENDING</string>
+                              <property name="rightMargin">
+                               <number>26</number>
                               </property>
-                             </item>
-                             <item>
-                              <property name="text">
-                               <string>STARTED</string>
+                              <property name="bottomMargin">
+                               <number>24</number>
                               </property>
-                             </item>
-                             <item>
-                              <property name="text">
-                               <string>IN_PROGRESS</string>
+                              <property name="horizontalSpacing">
+                               <number>12</number>
                               </property>
-                             </item>
-                             <item>
-                              <property name="text">
-                               <string>COMPLETED</string>
+                              <property name="verticalSpacing">
+                               <number>8</number>
                               </property>
-                             </item>
-                             <item>
-                              <property name="text">
-                               <string>CANCELLED</string>
-                              </property>
-                             </item>
-                            </widget>
-                           </item>
-                           <item row="3" column="3">
-                            <widget class="QDoubleSpinBox" name="dspn_value">
-                             <property name="minimumSize">
-                              <size>
-                               <width>132</width>
-                               <height>36</height>
-                              </size>
-                             </property>
-                             <property name="maximumSize">
-                              <size>
-                               <width>132</width>
-                               <height>36</height>
-                              </size>
-                             </property>
-                             <property name="styleSheet">
-                              <string notr="true">font: 9pt &quot;MS Shell Dlg 2&quot;;</string>
-                             </property>
-                             <property name="buttonSymbols">
-                              <enum>QAbstractSpinBox::UpDownArrows</enum>
-                             </property>
-                             <property name="prefix">
-                              <string>$ </string>
-                             </property>
-                             <property name="decimals">
-                              <number>2</number>
-                             </property>
-                             <property name="minimum">
-                              <double>0.000000000000000</double>
-                             </property>
-                             <property name="maximum">
-                              <double>999999.989999999990687</double>
-                             </property>
-                             <property name="singleStep">
-                              <double>1.000000000000000</double>
-                             </property>
-                             <property name="groupSeparatorShown" stdset="0">
-                              <bool>true</bool>
-                             </property>
+                              <item row="0" column="0">
+                               <widget class="QLabel" name="lbl_work_date">
+                                <property name="text">
+                                 <string>WORK DATE</string>
+                                </property>
+                               </widget>
+                              </item>
+                              <item row="0" column="1">
+                               <widget class="QLabel" name="lbl_job_code">
+                                <property name="text">
+                                 <string>JOB CODE</string>
+                                </property>
+                               </widget>
+                              </item>
+                              <item row="0" column="3">
+                               <widget class="QLabel" name="lbl_payment">
+                                <property name="text">
+                                 <string>PAYMENT METHOD</string>
+                                </property>
+                               </widget>
+                              </item>
+                              <item row="1" column="0">
+                               <widget class="QDateEdit" name="date_work_date">
+                                <property name="minimumSize">
+                                 <size>
+                                  <width>140</width>
+                                  <height>36</height>
+                                 </size>
+                                </property>
+                                <property name="maximumSize">
+                                 <size>
+                                  <width>140</width>
+                                  <height>36</height>
+                                 </size>
+                                </property>
+                                <property name="styleSheet">
+                                 <string notr="true">font: 9pt &quot;MS Shell Dlg 2&quot;;</string>
+                                </property>
+                                <property name="displayFormat">
+                                 <string>MM/dd/yyyy</string>
+                                </property>
+                                <property name="calendarPopup">
+                                 <bool>true</bool>
+                                </property>
+                               </widget>
+                              </item>
+                              <item row="1" column="1" colspan="2">
+                               <layout class="QHBoxLayout" name="layout_job_code_field_row">
+                                <property name="spacing">
+                                 <number>8</number>
+                                </property>
+                                <item>
+                                 <widget class="QComboBox" name="cmb_job_code">
+                                  <property name="minimumSize">
+                                   <size>
+                                    <width>160</width>
+                                    <height>46</height>
+                                   </size>
+                                  </property>
+                                  <property name="toolTip">
+                                   <string>Type or pick an existing job code — links multiple work days under the same project</string>
+                                  </property>
+                                  <property name="editable">
+                                   <bool>true</bool>
+                                  </property>
+                                  <property name="insertPolicy">
+                                   <enum>QComboBox::NoInsert</enum>
+                                  </property>
+                                 </widget>
+                                </item>
+                                <item>
+                                 <widget class="QPushButton" name="btn_generate_job_code">
+                                  <property name="minimumSize">
+                                   <size>
+                                    <width>0</width>
+                                    <height>36</height>
+                                   </size>
+                                  </property>
+                                  <property name="cursor">
+                                   <cursorShape>PointingHandCursor</cursorShape>
+                                  </property>
+                                  <property name="styleSheet">
+                                   <string notr="true">QPushButton { background-color: #37474F; color: #FFFFFF; border: none; border-radius: 6px; padding: 0 14px; font-size: 12px; font-weight: 600; } QPushButton:hover { background-color: #546E7A; }</string>
+                                  </property>
+                                  <property name="text">
+                                   <string>+ Generate Code</string>
+                                  </property>
+                                 </widget>
+                                </item>
+                                <item>
+                                 <widget class="QLabel" name="lbl_days_worked_value">
+                                  <property name="minimumSize">
+                                   <size>
+                                    <width>0</width>
+                                    <height>30</height>
+                                   </size>
+                                  </property>
+                                  <property name="styleSheet">
+                                   <string notr="true">font-size:16px; font-weight:800; color:#1565C0; background:transparent;</string>
+                                  </property>
+                                  <property name="text">
+                                   <string>—</string>
+                                  </property>
+                                 </widget>
+                                </item>
+                               </layout>
+                              </item>
+                              <item row="1" column="3">
+                               <widget class="QComboBox" name="cmb_payment">
+                                <property name="minimumSize">
+                                 <size>
+                                  <width>140</width>
+                                  <height>46</height>
+                                 </size>
+                                </property>
+                                <property name="maximumSize">
+                                 <size>
+                                  <width>140</width>
+                                  <height>36</height>
+                                 </size>
+                                </property>
+                                <property name="styleSheet">
+                                 <string notr="true">font: 9pt &quot;MS Shell Dlg 2&quot;;</string>
+                                </property>
+                                <item>
+                                 <property name="text">
+                                  <string>Receivable</string>
+                                 </property>
+                                </item>
+                                <item>
+                                 <property name="text">
+                                  <string>Paid</string>
+                                 </property>
+                                </item>
+                               </widget>
+                              </item>
+                              <item row="2" column="0">
+                               <widget class="QLabel" name="lbl_contractor">
+                                <property name="text">
+                                 <string>CONTRACTOR</string>
+                                </property>
+                               </widget>
+                              </item>
+                              <item row="2" column="1">
+                               <widget class="QLabel" name="lbl_company_form">
+                                <property name="text">
+                                 <string>COMPANY</string>
+                                </property>
+                               </widget>
+                              </item>
+                              <item row="2" column="2">
+                               <widget class="QLabel" name="lbl_status_form">
+                                <property name="text">
+                                 <string>STATUS</string>
+                                </property>
+                               </widget>
+                              </item>
+                              <item row="2" column="3">
+                               <widget class="QLabel" name="lbl_value">
+                                <property name="text">
+                                 <string>VALUE ($)</string>
+                                </property>
+                               </widget>
+                              </item>
+                              <item row="3" column="0">
+                               <widget class="QComboBox" name="cmb_contractor">
+                                <property name="minimumSize">
+                                 <size>
+                                  <width>190</width>
+                                  <height>46</height>
+                                 </size>
+                                </property>
+                                <property name="maximumSize">
+                                 <size>
+                                  <width>190</width>
+                                  <height>36</height>
+                                 </size>
+                                </property>
+                                <property name="styleSheet">
+                                 <string notr="true">font: 9pt &quot;MS Shell Dlg 2&quot;;</string>
+                                </property>
+                               </widget>
+                              </item>
+                              <item row="3" column="1">
+                               <widget class="QComboBox" name="cmb_company_form">
+                                <property name="minimumSize">
+                                 <size>
+                                  <width>190</width>
+                                  <height>46</height>
+                                 </size>
+                                </property>
+                                <property name="maximumSize">
+                                 <size>
+                                  <width>190</width>
+                                  <height>36</height>
+                                 </size>
+                                </property>
+                                <property name="styleSheet">
+                                 <string notr="true">font: 9pt &quot;MS Shell Dlg 2&quot;;</string>
+                                </property>
+                               </widget>
+                              </item>
+                              <item row="3" column="2">
+                               <widget class="QComboBox" name="cmb_status_form">
+                                <property name="minimumSize">
+                                 <size>
+                                  <width>150</width>
+                                  <height>46</height>
+                                 </size>
+                                </property>
+                                <property name="maximumSize">
+                                 <size>
+                                  <width>100</width>
+                                  <height>36</height>
+                                 </size>
+                                </property>
+                                <property name="styleSheet">
+                                 <string notr="true">font: 9pt &quot;MS Shell Dlg 2&quot;;</string>
+                                </property>
+                                <item>
+                                 <property name="text">
+                                  <string>PENDING</string>
+                                 </property>
+                                </item>
+                                <item>
+                                 <property name="text">
+                                  <string>STARTED</string>
+                                 </property>
+                                </item>
+                                <item>
+                                 <property name="text">
+                                  <string>IN_PROGRESS</string>
+                                 </property>
+                                </item>
+                                <item>
+                                 <property name="text">
+                                  <string>COMPLETED</string>
+                                 </property>
+                                </item>
+                                <item>
+                                 <property name="text">
+                                  <string>CANCELLED</string>
+                                 </property>
+                                </item>
+                               </widget>
+                              </item>
+                              <item row="3" column="3">
+                               <widget class="QDoubleSpinBox" name="dspn_value">
+                                <property name="minimumSize">
+                                 <size>
+                                  <width>132</width>
+                                  <height>36</height>
+                                 </size>
+                                </property>
+                                <property name="maximumSize">
+                                 <size>
+                                  <width>132</width>
+                                  <height>36</height>
+                                 </size>
+                                </property>
+                                <property name="styleSheet">
+                                 <string notr="true">font: 9pt &quot;MS Shell Dlg 2&quot;;</string>
+                                </property>
+                                <property name="buttonSymbols">
+                                 <enum>QAbstractSpinBox::UpDownArrows</enum>
+                                </property>
+                                <property name="prefix">
+                                 <string>$ </string>
+                                </property>
+                                <property name="decimals">
+                                 <number>2</number>
+                                </property>
+                                <property name="minimum">
+                                 <double>0.000000000000000</double>
+                                </property>
+                                <property name="maximum">
+                                 <double>999999.989999999990687</double>
+                                </property>
+                                <property name="singleStep">
+                                 <double>1.000000000000000</double>
+                                </property>
+                                <property name="groupSeparatorShown" stdset="0">
+                                 <bool>true</bool>
+                                </property>
+                               </widget>
+                              </item>
+                             </layout>
                             </widget>
                            </item>
                           </layout>

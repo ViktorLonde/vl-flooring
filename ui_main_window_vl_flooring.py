@@ -1240,10 +1240,7 @@ class Ui_MainWindow(object):
 
         self.layout_frame_card_job.addWidget(self.card_header_job_info)
 
-
-        self.layout_job_body_cards.addWidget(self.frame_card_job)
-
-        self.frame_job_info_body = QFrame(self.frame_job_body)
+        self.frame_job_info_body = QFrame(self.frame_card_job)
         self.frame_job_info_body.setObjectName(u"frame_job_info_body")
         self.frame_job_info_body.setStyleSheet(u"QFrame#frame_job_info_body { border-top-left-radius:0px; border-top-right-radius:0px; border-bottom-left-radius:10px; border-bottom-right-radius:10px; }")
         self.grid_job_info = QGridLayout(self.frame_job_info_body)
@@ -1378,7 +1375,10 @@ class Ui_MainWindow(object):
         self.grid_job_info.addWidget(self.dspn_value, 3, 3, 1, 1)
 
 
-        self.layout_job_body_cards.addWidget(self.frame_job_info_body)
+        self.layout_frame_card_job.addWidget(self.frame_job_info_body)
+
+
+        self.layout_job_body_cards.addWidget(self.frame_card_job)
 
         self.layout_work_client_row = QHBoxLayout()
         self.layout_work_client_row.setSpacing(24)
