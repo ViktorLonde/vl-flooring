@@ -139,13 +139,38 @@ class UtilsMixin:
             return ""
         return raw
 
+    _DB_POOL_SIZE = 8
+
+    def _connect_from_pool(self):
+        """Pega uma conexão já aberta do pool (abrir uma conexão nova pela
+        rede Wi-Fi é o que mais demora). conn.close() devolve a conexão ao
+        pool e desfaz o que não teve commit. Se o pool estiver todo em uso
+        ou der qualquer problema, abre uma conexão normal, como antes."""
+        pool = getattr(self, "_db_pool", None)
+        if pool is None and not getattr(self, "_db_pool_failed", False):
+            try:
+                from mysql.connector import pooling
+                pool = pooling.MySQLConnectionPool(
+                    pool_name="vl_flooring", pool_size=self._DB_POOL_SIZE,
+                    pool_reset_session=True, **self.db_config)
+                self._db_pool = pool
+            except Exception:
+                logging.getLogger("vl_flooring").warning("connection pool unavailable", exc_info=True)
+                self._db_pool_failed = True
+        if pool is not None:
+            try:
+                return pool.get_connection()
+            except Exception as e:  # pool cheio (conexão esquecida aberta) ou rede caiu
+                logging.getLogger("vl_flooring").info("pool: %s — opening a direct connection", e)
+        return mysql.connector.connect(**self.db_config)
+
     def _get_connection(self):
-        """Abre e retorna uma nova conexao com o MySQL usando self.db_config."""
+        """Retorna uma conexão com o MySQL (do pool) usando self.db_config."""
         if mysql is None:
             raise RuntimeError(
                 "mysql-connector-python não instalado. Rode: pip install mysql-connector-python"
             )
-        conn = mysql.connector.connect(**self.db_config)
+        conn = self._connect_from_pool()
         # Perfil "Viewer": o próprio MySQL recusa qualquer gravação nesta
         # conexão (segunda barreira, além dos botões desativados).
         if getattr(self, "_db_read_only", False):
