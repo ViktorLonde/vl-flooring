@@ -27,7 +27,7 @@ _WRITE_BUTTON_PREFIXES = (
     "btn_new_", "btn_save_", "btn_delete_", "btn_update_", "btn_generate_", "btn_send_",
     "btn_add_", "btn_remove_", "btn_settings_", "btn_clean_", "btn_split_", "btn_dashboard_record_",
     "btn_home_new_", "btn_home_generate_", "btn_schedule_new_", "btn_expense_attach_",
-    "btn_job_go_to_expense",
+    "btn_job_go_to_expense", "btn_bulk_", "btn_duplicate_",
 )
 # Botões criados por código, sem objectName: reconhecidos pelo texto
 _WRITE_BUTTON_WORDS = ("save", "delete", "new", "add", "remove", "generate", "send", "record payment",
@@ -104,7 +104,7 @@ class PermissionsMixin:
             self._btn_change_history.setVisible(rules["admin_pages"])
 
         # Relatórios financeiros
-        for tab in (ui.tab_pnl, ui.tab_1099):
+        for tab in [ui.tab_pnl, ui.tab_1099] + ([ui.tab_job_profit] if hasattr(ui, "tab_job_profit") else []):
             ui.tabWidget_receivables.setTabVisible(ui.tabWidget_receivables.indexOf(tab), rules["finance"])
 
         read_only_tip = "Your user has read-only access."

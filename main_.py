@@ -32,10 +32,12 @@ from paginas.visual import VisualMixin, SIDEBAR_ITEMS
 from paginas.moderno import ModernMixin
 from paginas.tema import ThemeMixin
 from paginas.sessao import SessionMixin
+from paginas.operacoes import OperationsMixin
 from PySide6.QtCore import Signal
 
 
 class MainWindow(
+    OperationsMixin,
     SessionMixin,
     ThemeMixin,
     ModernMixin,
@@ -105,6 +107,7 @@ class MainWindow(
         self._setup_work_type_category_locks()
         self._setup_incomplete_jobs_button()
         self._setup_change_history_button()
+        self._setup_operations()
         self._setup_icon_theme()
         self._setup_modern_ui()
         self._setup_theme_toggle()

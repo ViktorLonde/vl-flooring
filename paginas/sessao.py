@@ -144,11 +144,52 @@ class SessionMixin:
         if old_pending:
             items.append(("hourglass", "#B26A00", f"{plural(old_pending, 'job')} from past days still PENDING",
                           self._show_old_pending_jobs))
+        backup_item = self._backup_attention_item()
+        if backup_item:
+            items.append(backup_item)
         if incomplete:
             items.append(("clipboard-list", "#1565C0",
                           f"{plural(incomplete, 'job')} from the last 30 days missing information",
                           self.open_incomplete_jobs_dialog))
         return items
+
+    def _backup_attention_item(self):
+        """Avisa se o último backup tem mais de 2 dias (o backup automático só
+        roda com o disco D: ligado no notebook). Só para Admin."""
+        if not self._role_rule("admin_pages"):
+            return None
+        try:
+            import backup_db
+            backups = backup_db.list_backups()
+        except Exception:
+            return None
+        import socket
+        server = (self.db_config.get("server_name") or "").lower()
+        on_server = self.db_config.get("host") in ("127.0.0.1", "localhost") or socket.gethostname().lower() == server
+        if not backups:
+            if not on_server:
+                return None  # este computador não guarda backups
+            return ("database-import", "#C62828", "No database backup found on this computer",
+                    self._run_backup_now)
+        age = (datetime.now() - backups[0][1]).days
+        if age < 2:
+            return None
+        return ("database-import", "#C62828", f"Last database backup was {age} days ago — back up now",
+                self._run_backup_now if on_server else (lambda: None))
+
+    def _run_backup_now(self):
+        import backup_db
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            path = backup_db.run_backup()
+        except Exception as e:
+            QApplication.restoreOverrideCursor()
+            QMessageBox.critical(self, "Backup failed", f"The backup could not be made:\n{e}")
+            return
+        QApplication.restoreOverrideCursor()
+        from paginas.moderno import show_toast
+        show_toast(f"Backup saved: {os.path.basename(path)}", "success", self)
+        self.show_attention_summary()
 
     def _show_old_pending_jobs(self):
         self._go_to_page(1, self.ui.btn_jobs)
