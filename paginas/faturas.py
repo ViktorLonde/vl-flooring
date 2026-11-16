@@ -142,6 +142,8 @@ class InvoicesMixin:
             if not send_email and not send_whatsapp:
                 QMessageBox.information(dialog, "Choose a method", "Select Email and/or WhatsApp first.")
                 return
+            if not self._confirm_bank_info_ready(dialog):
+                return
 
             email_ok, email_fail, wa_opened, skipped_no_pdf = 0, [], 0, []
 
@@ -706,6 +708,8 @@ class InvoicesMixin:
         def generate_pdfs():
             """Agrupa os jobs marcados por entidade e gera um PDF de invoice
             pra cada entidade que tiver pelo menos um job selecionado."""
+            if not self._confirm_bank_info_ready(dialog):
+                return
             bill_to = cmb_bill_to.currentText()
 
             entities = {}  # entity_id -> {"name": ..., "job_ids": [...], "expense_ids": [...]}

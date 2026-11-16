@@ -198,6 +198,35 @@ class InvoicePdfMixin:
 
         canvas.restoreState()
 
+    # Valores de exemplo que vêm de fábrica em company_settings.py
+    _PLACEHOLDER_BANK_MARKERS = ("123456789", "your bank name", "000000000")
+
+    def _bank_info_is_placeholder(self):
+        info = company_settings.COMPANY_BANK_INFO
+        text = " ".join(str(info.get(k) or "") for k in ("account_no", "bank_details")).lower()
+        return (not str(info.get("account_no") or "").strip()
+                or any(marker in text for marker in self._PLACEHOLDER_BANK_MARKERS))
+
+    def _confirm_bank_info_ready(self, parent=None):
+        """Avisa se os dados bancários da invoice ainda são os de exemplo.
+        Retorna True se pode continuar."""
+        if not self._bank_info_is_placeholder():
+            return True
+        box = QMessageBox(parent or self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle("Bank details not set")
+        box.setText("The invoice will show the EXAMPLE bank details:")
+        info = company_settings.COMPANY_BANK_INFO
+        box.setInformativeText(
+            f"Account No: {info.get('account_no', '')}\n"
+            f"Bank Details: {info.get('bank_details', '')}\n\n"
+            "Update them in Settings → Bank Information before sending invoices to customers.")
+        continue_btn = box.addButton("Continue anyway", QMessageBox.ButtonRole.AcceptRole)
+        cancel_btn = box.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(cancel_btn)
+        box.exec()
+        return box.clickedButton() is continue_btn
+
     def _build_invoice_pdf(self, filepath, invoice_number, entity_label, entity_name, entity_contact_lines,
                             d_from_qdate, d_to_qdate, item_rows, jobs_total, has_expenses, expenses_rows,
                             expenses_total, discount, addition, tax_percent, status):
