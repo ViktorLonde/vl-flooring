@@ -80,6 +80,8 @@ def main():
     app = QApplication(sys.argv)
     registro.install_message_box_logging()
     registro.install_default_save_folder()
+    from paginas.visual import install_icon_theme
+    install_icon_theme(app)
 
     if not wait_for_database():
         sys.exit(1)

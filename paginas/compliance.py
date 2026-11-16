@@ -69,11 +69,7 @@ class ComplianceMixin:
         Chamado sempre que a sidebar expande/colapsa."""
         show_text = getattr(self, "_sidebar_expanded", False)
         due_soon = getattr(self, "_compliance_due_soon", 0)
-        label = "  📋 Compliance"
-        if due_soon:
-            label += f"  ({due_soon})"
-        self.ui.btn_reg_compliance.setText(label if show_text else "📋")
-        self.ui.btn_reg_compliance.setToolTip("" if show_text else "Compliance")
+        self._sidebar_label("btn_reg_compliance", show_text, f"  ({due_soon})" if due_soon else "")
 
     def _refresh_compliance_alerts(self):
         """Reconta itens de compliance vencidos/a vencer em 30 dias (LLC

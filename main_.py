@@ -28,9 +28,11 @@ from paginas.clientes import CustomersMixin
 from paginas.usuarios import UsersMixin
 from paginas.despesas import ExpensesMixin
 from paginas.permissoes import PermissionsMixin
+from paginas.visual import VisualMixin, SIDEBAR_ITEMS
 
 
 class MainWindow(
+    VisualMixin,
     PermissionsMixin,
     UtilsMixin,
     SettingsMixin,
@@ -93,6 +95,7 @@ class MainWindow(
         self._setup_work_type_category_locks()
         self._setup_incomplete_jobs_button()
         self._setup_change_history_button()
+        self._setup_icon_theme()
         self._setup_dashboard_period_filter()
         self._setup_pnl_period_filter()
         self._setup_1099_year_filter()
@@ -424,37 +427,12 @@ class MainWindow(
             self._expand_sidebar()
 
     def _update_sidebar_labels(self):
-        """Mostra/esconde texto dos botões e logo conforme estado da sidebar."""
+        """Mostra/esconde texto dos botões e logo conforme estado da sidebar
+        (ícones e nomes ficam em paginas/visual.py → SIDEBAR_ITEMS)."""
         show_text = self._sidebar_expanded
-
-        btn_texts = {
-            self.ui.btn_home: "  Home",
-            self.ui.btn_jobs: "  Job Records",
-            self.ui.btn_registrations: "  Registrations",
-            self.ui.btn_customer: "  Customer",
-            self.ui.btn_user: "  User",
-        }
-        for btn, text in btn_texts.items():
-            btn.setText(text if show_text else "")
-            btn.setToolTip("" if show_text else text.strip())
-
-        sub_btn_texts = {
-            self.ui.btn_reg_companies: ("  🏢 Companies", "🏢"),
-            self.ui.btn_reg_contractors: ("  👷 Contractors", "👷"),
-            self.ui.btn_reg_helpers: ("  🦺 Helpers", "🦺"),
-            self.ui.btn_reg_work_types: ("  🧱 Work Types", "🧱"),
-            self.ui.btn_reg_products: ("  📦 Products", "📦"),
-            self.ui.btn_reg_documents: ("  📁 Documents", "📁"),
-            self.ui.btn_reg_bank_reconciliation: ("  🏦 Bank Reconciliation", "🏦"),
-            self.ui.btn_reg_receipt_inbox: ("  📥 Receipt Inbox", "📥"),
-            self.ui.btn_reg_job_site_inbox: ("  📍 Job Site Inbox", "📍"),
-            self.ui.btn_reg_projects_dashboard: ("  📊 Projects Dashboard", "📊"),
-            self.ui.btn_nav_receivables: ("  💰 Receivables", "💰"),
-        }
-        for btn, (full_text, icon_only) in sub_btn_texts.items():
-            btn.setText(full_text if show_text else icon_only)
-            btn.setToolTip("" if show_text else full_text.strip())
-
+        for attr in SIDEBAR_ITEMS:
+            if attr != "btn_reg_compliance":
+                self._sidebar_label(attr, show_text)
         self.ui.label_logo.setVisible(show_text)
         # Compliance tem texto próprio porque mostra um contador de itens
         # vencendo (contagem já em cache — não bate no banco a cada hover).
