@@ -15,6 +15,10 @@ import sys
 # aberto em D:\) deixava a sidebar sem ícones.
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
+# Erros vão para logs/vl_flooring.log (ver registro.py)
+import registro
+registro.setup_logging()
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QMessageBox
 
@@ -30,6 +34,7 @@ DB_CONFIG = load_db_config()
 
 def on_login_successful(login_window: LoginWindow, main_window: MainWindow, username: str):
     """Chamado quando o login é bem-sucedido."""
+    main_window.set_current_user(username)
     try:
         main_window.ui.Top_label.setText(f"Dashboard  —  {username}")
     except Exception:
@@ -73,6 +78,8 @@ def main():
     )
 
     app = QApplication(sys.argv)
+    registro.install_message_box_logging()
+    registro.install_default_save_folder()
 
     if not wait_for_database():
         sys.exit(1)

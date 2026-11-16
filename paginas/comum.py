@@ -145,7 +145,19 @@ class UtilsMixin:
             raise RuntimeError(
                 "mysql-connector-python não instalado. Rode: pip install mysql-connector-python"
             )
-        return mysql.connector.connect(**self.db_config)
+        conn = mysql.connector.connect(**self.db_config)
+        # Perfil "Viewer": o próprio MySQL recusa qualquer gravação nesta
+        # conexão (segunda barreira, além dos botões desativados).
+        if getattr(self, "_db_read_only", False):
+            cur = conn.cursor()
+            cur.execute("SET SESSION TRANSACTION READ ONLY")
+            cur.close()
+            return conn
+        # Depois do login, toda alteração passa a ir pro histórico (audit_log)
+        username = getattr(self, "_current_username", None)
+        if username:
+            return historico.AuditConnection(conn, username)
+        return conn
 
     def _reload_city_combo_for_state(self, city_combo, state_id, keep_city_id=None):
         """Recarrega um combo de City mostrando só as cidades daquele State

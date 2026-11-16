@@ -22,3 +22,5 @@ modelos/
 *.bak*
 *.py2
 Novo(a) Text Document.txt
+logs/
+_arquivo_antigo/

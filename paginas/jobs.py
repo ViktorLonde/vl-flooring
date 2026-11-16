@@ -613,7 +613,8 @@ class JobsMixin:
         self._job_code_completer.setModel(QStringListModel([code for _, code in rows]))
 
     def _generate_job_code(self):
-        """Cria um novo projeto (job_projects) com um código sequencial novo
+        """Sugere o próximo código sequencial (o projeto em job_projects só é
+        criado ao salvar o job — ver save_job_record)
         (prefixo JB- para trabalhos por dia; PJ- fica reservado pra quando a
         área de trabalhos particulares existir), e já seleciona esse código
         no formulário. Só gera se pelo menos um de Contractor/Company/Client
@@ -648,12 +649,9 @@ class JobsMixin:
                 except (IndexError, ValueError):
                     continue
             new_code = f"{prefix}-{next_n:04d}"
-
-            cursor.execute(
-                "INSERT INTO job_projects (CODE, PROJECT_TYPE, STATUS) VALUES (%s, 'DAY_WORK', 'ACTIVE')",
-                (new_code,),
-            )
-            conn.commit()
+            # O código NÃO é gravado aqui: save_job_record cria o projeto
+            # quando o job for salvo. Assim, clicar em Generate Code e
+            # desistir não deixa códigos vazios no banco.
             cursor.close()
             conn.close()
         except (MySQLError, RuntimeError) as e:

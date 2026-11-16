@@ -42,6 +42,8 @@ from PySide6.QtGui import QColor, QDesktopServices, QTextCharFormat, QPixmap, QP
 from ui_main_window_vl_flooring import Ui_MainWindow
 from passwords import hash_password
 import company_settings
+import historico
+import logging
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 

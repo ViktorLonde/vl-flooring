@@ -18,6 +18,7 @@ class LoginWindow(QMainWindow, Ui_Login):
         super().__init__()
 
         self.setupUi(self)
+        self.setWindowTitle("VL Flooring — Login")
         
         # Animação de fade-in ao abrir
         self.anim = QPropertyAnimation(self, b"windowOpacity")

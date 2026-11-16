@@ -27,9 +27,11 @@ from paginas.home import HomeMixin
 from paginas.clientes import CustomersMixin
 from paginas.usuarios import UsersMixin
 from paginas.despesas import ExpensesMixin
+from paginas.permissoes import PermissionsMixin
 
 
 class MainWindow(
+    PermissionsMixin,
     UtilsMixin,
     SettingsMixin,
     ComplianceMixin,
@@ -89,6 +91,8 @@ class MainWindow(
         self._setup_product_unit_completer()
         self._setup_work_type_unit_display()
         self._setup_work_type_category_locks()
+        self._setup_incomplete_jobs_button()
+        self._setup_change_history_button()
         self._setup_dashboard_period_filter()
         self._setup_pnl_period_filter()
         self._setup_1099_year_filter()
@@ -676,6 +680,9 @@ class MainWindow(
 
     def _go_to_page(self, index, active_btn):
         """Troca a pagina visivel, marca o botao correspondente como ativo na sidebar e atualiza o titulo no topo. Se for a pagina Receivables, recarrega dashboard e invoices."""
+        # Users (7) e Settings (9) são só do Admin — ver paginas/permissoes.py
+        if index in (7, 9) and not self._role_rule("admin_pages"):
+            return
         # Se está saindo do Job Records com o formulário New/Edit Job com
         # alterações não salvas, confirma antes de trocar de página.
         currently_on_jobs = self.ui.Pages.currentIndex() == 1
