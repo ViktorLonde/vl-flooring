@@ -32,17 +32,40 @@ from main_ import MainWindow
 DB_CONFIG = load_db_config()
 
 
-def on_login_successful(login_window: LoginWindow, main_window: MainWindow, username: str):
-    """Chamado quando o login é bem-sucedido."""
-    main_window.set_current_user(username)
-    try:
-        main_window.ui.Top_label.setText(f"Dashboard  —  {username}")
-    except Exception:
-        pass
+# Janelas abertas (guardadas aqui pro Python não apagar no meio do caminho)
+_session = {}
 
-    login_window.hide()
-    main_window.showMaximized()
-    login_window.deleteLater()
+
+def start_session():
+    """Monta a janela principal (escondida) e mostra o login. Usado ao abrir
+    o app e em "Switch user" (cada login ganha uma janela nova, já com as
+    permissões do perfil certo)."""
+    main_window = MainWindow(db_config=DB_CONFIG)
+    main_window.hide()
+    login = LoginWindow()
+    _session["main"], _session["login"] = main_window, login
+
+    def on_login_successful(username: str):
+        main_window.set_current_user(username)
+        maximized = main_window.restore_ui_state()
+        login.hide()
+        if maximized:
+            main_window.showMaximized()
+        else:
+            main_window.show()
+        login.deleteLater()
+        main_window.show_attention_summary()
+
+    def on_signed_out():
+        old = main_window
+        start_session()               # mostra o login novo antes de fechar a janela antiga
+        old._closing_for_sign_out = True
+        old.close()
+        old.deleteLater()
+
+    login.login_successful.connect(on_login_successful)
+    main_window.signed_out.connect(on_signed_out)
+    login.show()
 
 
 def wait_for_database() -> bool:
@@ -88,15 +111,7 @@ def main():
     if not wait_for_database():
         sys.exit(1)
 
-    main_window = MainWindow(db_config=DB_CONFIG)
-    main_window.hide()
-
-    login = LoginWindow()
-    login.login_successful.connect(
-        lambda username: on_login_successful(login, main_window, username)
-    )
-    login.show()
-
+    start_session()
     sys.exit(app.exec())
 
 

@@ -183,3 +183,96 @@ class SettingsMixin:
             return
         self.ui.lbl_settings_logo_preview.setPixmap(QPixmap(COMPANY_LOGO_PATH))
         QMessageBox.information(self, "Logo Updated", "Logo updated successfully.")
+
+    # ── restaurar backup ──────────────────────────────────────────────
+    def _setup_restore_backup_button(self):
+        """Botão "Restore backup…" no fim da tela Settings (só Admin vê Settings)."""
+        from paginas.visual import tabler_icon
+        btn = QPushButton("  Restore backup…")
+        btn.setObjectName("btn_open_restore_backup")
+        btn.setIcon(tabler_icon("database-import", "#37474F", 16))
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setToolTip("Bring the database back to how it was on an earlier day")
+        btn.clicked.connect(self.open_restore_backup_dialog)
+        layout = self.ui.layout_settings_contents
+        layout.insertWidget(layout.indexOf(self.ui.btn_settings_save) + 1, btn)
+
+    def open_restore_backup_dialog(self):
+        import backup_db
+        backups = backup_db.list_backups()
+        if not backups:
+            QMessageBox.warning(self, "No backups", "No backup files were found on this computer.\n\n"
+                                f"Folders checked:\n{backup_db.BACKUP_DIR}\n{backup_db.CLOUD_DIR or ''}")
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Restore backup")
+        dialog.resize(640, 480)
+        layout = QVBoxLayout(dialog)
+        info = QLabel("Choose the day you want to go back to. <b>Everything entered after that backup "
+                      "will be lost.</b> A backup of the current data is made automatically first, "
+                      "so this can be undone.")
+        info.setWordWrap(True)
+        layout.addWidget(info)
+        table = QTableWidget(len(backups), 3)
+        table.setHorizontalHeaderLabels(["Backup date", "Size", "Folder"])
+        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        for r, (path, when, size_kb, folder) in enumerate(backups):
+            for c, v in enumerate([when.strftime("%m/%d/%Y  %I:%M %p"), f"{size_kb:,.0f} KB",
+                                   "OneDrive" if "OneDrive" in folder else folder]):
+                item = QTableWidgetItem(v)
+                if c == 0:
+                    item.setData(Qt.ItemDataRole.UserRole, path)
+                table.setItem(r, c, item)
+        table.selectRow(0)
+        layout.addWidget(table, 1)
+        row = QHBoxLayout()
+        row.addStretch(1)
+        btn_cancel = QPushButton("Cancel")
+        btn_restore = QPushButton("Restore selected backup")
+        btn_restore.setStyleSheet("QPushButton { background-color: #C62828; color: #FFFFFF; border: none; "
+                                  "border-radius: 6px; padding: 8px 16px; font-weight: 700; } "
+                                  "QPushButton:hover { background-color: #B71C1C; }")
+        row.addWidget(btn_cancel)
+        row.addWidget(btn_restore)
+        layout.addLayout(row)
+        btn_cancel.clicked.connect(dialog.reject)
+
+        def do_restore():
+            current = table.currentRow()
+            if current < 0:
+                return
+            path = table.item(current, 0).data(Qt.ItemDataRole.UserRole)
+            when = table.item(current, 0).text()
+            from PySide6.QtWidgets import QInputDialog
+            typed, ok = QInputDialog.getText(
+                dialog, "Confirm restore",
+                f"This will replace ALL current data with the backup from {when}.\n"
+                "Anything entered after that will be lost (a safety backup is made first).\n\n"
+                "Type RESTORE to continue:")
+            if not ok or typed.strip().upper() != "RESTORE":
+                return
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+            try:
+                safety = backup_db.run_backup()
+                backup_db.restore_backup(path)
+            except Exception as e:
+                QApplication.restoreOverrideCursor()
+                logging.getLogger("vl_flooring").exception("restore failed")
+                QMessageBox.critical(dialog, "Restore failed", f"The backup could not be restored:\n{e}")
+                return
+            QApplication.restoreOverrideCursor()
+            logging.getLogger("vl_flooring").warning("database restored from %s (safety backup %s)", path, safety)
+            dialog.accept()
+            box = QMessageBox(QMessageBox.Icon.Information, "Restore complete",
+                              f"The database is back to {when}.\n\n"
+                              f"The data from before the restore was saved in:\n{os.path.basename(safety)}\n\n"
+                              "The app will now reload — sign in again.", parent=self)
+            box.exec()
+            self._job_form_dirty = False
+            self.signed_out.emit()  # recarrega tudo com os dados restaurados
+
+        btn_restore.clicked.connect(do_restore)
+        dialog.exec()

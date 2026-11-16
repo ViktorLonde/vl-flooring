@@ -154,7 +154,100 @@ class CustomersMixin:
                 item = QTableWidgetItem(text)
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 table.setItem(r, c, item)
-        self.ui.lbl_customer_job_history_total.setText(f"Total: ${total:,.2f}")
+        # Resumo financeiro do cliente (invoices geradas e pagas)
+        billed = paid = 0.0
+        n_invoices = 0
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*), COALESCE(SUM(TOTAL_AMOUNT),0), COALESCE(SUM(AMOUNT_PAID),0) "
+                           "FROM client_invoices WHERE CLIENT_ID = %s AND STATUS <> 'CANCELLED'", (customer_id,))
+            n_invoices, billed, paid = cursor.fetchone()
+            billed, paid = float(billed or 0), float(paid or 0)
+            cursor.close()
+            conn.close()
+        except (MySQLError, RuntimeError):
+            logging.getLogger("vl_flooring").exception("customer invoice summary failed")
+        jobs_text = f"{len(rows)} job{'s' if len(rows) != 1 else ''}"
+        summary = f"{jobs_text} · Work total ${total:,.2f}"
+        if n_invoices:
+            summary += f"  ·  Invoiced ${billed:,.2f} · Paid ${paid:,.2f} · Open ${max(billed - paid, 0):,.2f}"
+        else:
+            summary += "  ·  No invoices yet"
+        self.ui.lbl_customer_job_history_total.setText(summary)
+        self.ui.lbl_customer_job_history_total.setWordWrap(True)
+        self._customer_history_id = customer_id
+        btn = getattr(self, "_btn_customer_invoices", None)
+        if btn is not None:
+            btn.setVisible(bool(n_invoices))
+
+    def _setup_customer_invoices_button(self):
+        """Botão "Invoices" ao lado do resumo do histórico do cliente."""
+        from paginas.visual import tabler_icon
+        label = self.ui.lbl_customer_job_history_total
+        parent_layout = label.parentWidget().layout()
+        btn = QPushButton("  Invoices")
+        btn.setIcon(tabler_icon("receipt", "#37474F", 16))
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setVisible(False)
+        btn.clicked.connect(self.open_customer_invoices_dialog)
+        idx = parent_layout.indexOf(label)
+        row = QHBoxLayout()
+        parent_layout.removeWidget(label)
+        row.addWidget(label, 1)
+        row.addWidget(btn)
+        if hasattr(parent_layout, "insertLayout"):
+            parent_layout.insertLayout(idx, row)
+        else:
+            parent_layout.addLayout(row)
+        self._btn_customer_invoices = btn
+
+    def open_customer_invoices_dialog(self):
+        customer_id = getattr(self, "_customer_history_id", None)
+        if not customer_id:
+            return
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT ID, GENERATED_AT, PERIOD_FROM, PERIOD_TO, TOTAL_AMOUNT, AMOUNT_PAID, STATUS, PDF_PATH "
+                           "FROM client_invoices WHERE CLIENT_ID = %s ORDER BY GENERATED_AT DESC", (customer_id,))
+            rows = cursor.fetchall()
+            cursor.close()
+            conn.close()
+        except (MySQLError, RuntimeError) as e:
+            QMessageBox.warning(self, "Database Error", f"Could not load invoices:\n{e}")
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Customer invoices")
+        dialog.resize(760, 420)
+        layout = QVBoxLayout(dialog)
+        table = QTableWidget(len(rows), 7)
+        table.setHorizontalHeaderLabels(["#", "Generated", "Period", "Total", "Paid", "Open", "Status"])
+        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        fmt = lambda d: d.strftime("%m/%d/%Y") if d else ""
+        for r, (iid, gen, pfrom, pto, tot, pd, status, pdf) in enumerate(rows):
+            tot, pd = float(tot or 0), float(pd or 0)
+            vals = [str(iid), fmt(gen), f"{fmt(pfrom)} – {fmt(pto)}", f"${tot:,.2f}", f"${pd:,.2f}",
+                    f"${max(tot - pd, 0):,.2f}", status or ""]
+            for c, v in enumerate(vals):
+                item = QTableWidgetItem(v)
+                if c == 0:
+                    item.setData(Qt.ItemDataRole.UserRole, pdf)
+                table.setItem(r, c, item)
+
+        def open_pdf(row, _col):
+            pdf = table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+            if pdf and os.path.exists(pdf):
+                QDesktopServices.openUrl(QUrl.fromLocalFile(pdf))
+            else:
+                QMessageBox.information(dialog, "PDF not found", "The PDF of this invoice was not found on this computer.")
+
+        table.cellDoubleClicked.connect(open_pdf)
+        layout.addWidget(QLabel("Double-click an invoice to open its PDF."))
+        layout.addWidget(table)
+        dialog.exec()
 
     def save_customer_record(self):
         """Insere ou atualiza um registro em clients."""

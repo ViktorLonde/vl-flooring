@@ -16,6 +16,12 @@ dump = subprocess.run([os.path.join(BIN, "mysqldump.exe"), f"--defaults-extra-fi
 subprocess.run([os.path.join(BIN, "mysql.exe"), f"--defaults-extra-file={cnf.name}", TEST_DB], input=dump, check=True)
 print("restored", flush=True)
 TEST = {**REAL, "database": TEST_DB}
+# Os perfis de teste são fixados na CÓPIA (no banco real eles podem mudar)
+_fix = mysql.connector.connect(**TEST); _fc = _fix.cursor()
+_fc.execute("UPDATE users SET role='Viewer', status='Active' WHERE username='Nana'")
+_fc.execute("UPDATE users SET role='MANAGER', status='Active' WHERE username='Lia'")
+_fc.execute("UPDATE users SET role='ADMIN', status='Active' WHERE username='viktorlonde'")
+_fix.commit(); _fix.close()
 msgs = []
 QMessageBox.information = staticmethod(lambda *a, **k: msgs.append(str(a[2])) or QMessageBox.StandardButton.Ok)
 QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes)
@@ -80,6 +86,7 @@ try:
     w.set_current_user("Nana")
     check("viewer label", "Viewer" in w.ui.lbl_user.text(), w.ui.lbl_user.text())
     check("viewer no Users/Settings", not w.ui.btn_user.isVisibleTo(w) and not w.ui.btn_settings.isVisibleTo(w))
+    check("viewer blocked buttons look faded", w.ui.btn_save_job.graphicsEffect() is not None)
     check("viewer buttons disabled", not w.ui.btn_save_job.isEnabled() and not w.ui.btn_new_customer.isEnabled()
           and not w.ui.btn_delete_job.isEnabled(), "")
     check("viewer export still enabled", w.ui.btn_export_pdf_jobs.isEnabled() and w.ui.btn_refresh_jobs.isEnabled())

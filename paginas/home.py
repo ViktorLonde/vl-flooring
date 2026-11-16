@@ -50,7 +50,8 @@ class HomeMixin:
                 """
                 SELECT DATE_FORMAT(WORK_DATE, '%Y-%m') AS ym, COALESCE(SUM(VALUE), 0)
                 FROM work_days
-                WHERE WORK_DATE >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+                WHERE WORK_DATE >= DATE_FORMAT(CURDATE() - INTERVAL 5 MONTH, '%Y-%m-01')
+                  AND WORK_DATE < DATE_FORMAT(CURDATE() + INTERVAL 1 MONTH, '%Y-%m-01')
                 GROUP BY ym
                 ORDER BY ym
                 """
@@ -162,48 +163,71 @@ class HomeMixin:
             layout.addLayout(col)
 
     def _draw_home_revenue_chart(self, revenue_by_month):
-        """Desenha um gráfico de barras simples (sem depender de bibliotecas
-        externas de gráfico) mostrando o faturamento por mês, usando QFrames
-        com altura proporcional ao valor."""
+        """Gráfico de barras do faturamento dos últimos 6 meses (incluindo o
+        atual). Meses sem trabalho aparecem com barra zerada, pra dar pra
+        comparar; o valor exato aparece em cima e ao passar o mouse."""
         layout = self.ui.layout_home_revenue_chart
         while layout.count():
             child = layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
+            elif child.layout():
+                sub = child.layout()
+                while sub.count():
+                    item = sub.takeAt(0)
+                    if item.widget():
+                        item.widget().deleteLater()
 
-        if not revenue_by_month:
-            layout.addWidget(QLabel("No revenue data yet"))
+        values = {ym: float(v or 0) for ym, v in revenue_by_month}
+        today = date.today()
+        months = []
+        for back in range(5, -1, -1):
+            y, m = today.year, today.month - back
+            while m <= 0:
+                m += 12
+                y -= 1
+            months.append((f"{y:04d}-{m:02d}", m))
+        if not any(values.get(ym) for ym, _ in months):
+            empty = QLabel("No revenue in the last 6 months")
+            empty.setStyleSheet("color:#94A3B8; font-size:12px; background:transparent;")
+            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            layout.addWidget(empty)
             return
 
-        max_value = max(float(v) for _, v in revenue_by_month) or 1.0
+        max_value = max(values.get(ym, 0) for ym, _ in months) or 1.0
         month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-
-        for ym, value in revenue_by_month:
-            value = float(value or 0)
-            year_str, month_str = ym.split("-")
-            label_text = month_names[int(month_str) - 1]
-
+        layout.setSpacing(6)
+        for ym, month in months:
+            value = values.get(ym, 0.0)
+            current = ym == f"{today.year:04d}-{today.month:02d}"
             col = QVBoxLayout()
+            col.setSpacing(3)
             col.addStretch()
 
-            value_lbl = QLabel(f"${value:,.0f}")
+            if value >= 1000:
+                short = f"${value / 1000:.1f}k".replace(".0k", "k")
+            else:
+                short = f"${value:,.0f}"
+            value_lbl = QLabel(short if value else "")
             value_lbl.setStyleSheet("font-size:10px; font-weight:700; color:#1565C0; background:transparent;")
             value_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             col.addWidget(value_lbl)
 
-            bar_height = max(6, int((value / max_value) * 130))
+            bar_height = max(3, int((value / max_value) * 80)) if value else 3
             bar = QFrame()
-            bar.setMinimumHeight(bar_height)
-            bar.setMaximumHeight(bar_height)
-            bar.setStyleSheet(f"background-color: {BRAND_ORANGE}; border-radius: 4px;")
+            bar.setFixedHeight(bar_height)
+            bar.setMinimumWidth(18)
+            color = BRAND_ORANGE if current else ("#F4A06B" if value else "#E3E8EE")
+            bar.setStyleSheet(f"background-color: {color}; border-radius: 4px;")
+            bar.setToolTip(f"{month_names[month - 1]} {ym[:4]}: ${value:,.2f}")
             col.addWidget(bar)
 
-            month_lbl = QLabel(label_text)
-            month_lbl.setStyleSheet("font-size:11px; font-weight:600; color:#6B7C93; background:transparent;")
+            month_lbl = QLabel(month_names[month - 1])
+            month_lbl.setStyleSheet("font-size:11px; font-weight:600; color:#6B7C93; background:transparent;"
+                                    + (" color:#1C2B3A;" if current else ""))
             month_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             col.addWidget(month_lbl)
-
             layout.addLayout(col)
 
     def _go_home_new_job(self):

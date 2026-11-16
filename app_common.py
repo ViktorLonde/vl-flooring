@@ -167,7 +167,8 @@ class _DonutChartWidget(QWidget):
             hole_side, hole_side,
         )
         # Cores do miolo seguem o tema (modo escuro → miolo escuro, número claro)
-        dark_theme = QApplication.palette().color(QPalette.ColorRole.Window).lightness() < 128
+        from paginas import tema  # import aqui pra evitar import circular
+        dark_theme = tema.is_dark()
         painter.setBrush(QBrush(QColor("#1B2533" if dark_theme else "#FFFFFF")))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawEllipse(hole_rect)

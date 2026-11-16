@@ -75,7 +75,9 @@ class ProjectsMixin:
         content_row.addLayout(kpi_col)
 
         overview_layout.addLayout(content_row)
-        self.ui.layout_pg_home_outer.addWidget(self.ui.frame_projects_overview)
+        # Dentro da área com rolagem (antes ficava fixo embaixo e cortava o
+        # gráfico de receita e a lista de jobs recentes)
+        self.ui.layout_home_page.addWidget(self.ui.frame_projects_overview)
 
     def _classify_project_status(self, total_days, completed_days, cancelled_days):
         """Deriva um status de projeto (Active/Completed/Cancelled/No Jobs

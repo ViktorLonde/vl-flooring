@@ -116,11 +116,21 @@ class PermissionsMixin:
                 not name.startswith("btn_") and any(w in text for w in _WRITE_BUTTON_WORDS))
             is_delete = name.startswith("btn_delete_") or "delete" in text
             if rules["read_only"] and is_write:
-                btn.setEnabled(False)
-                btn.setToolTip(read_only_tip)
+                self._block_button(btn, read_only_tip)
             elif not rules["can_delete"] and is_delete:
-                btn.setEnabled(False)
-                btn.setToolTip(no_delete_tip)
+                self._block_button(btn, no_delete_tip)
+
+    @staticmethod
+    def _block_button(btn, tip):
+        """Desativa e deixa o botão apagado (sem isso os botões coloridos
+        continuavam parecendo clicáveis)."""
+        from PySide6.QtWidgets import QGraphicsOpacityEffect
+        btn.setEnabled(False)
+        btn.setToolTip(tip)
+        btn.setCursor(Qt.CursorShape.ForbiddenCursor)
+        effect = QGraphicsOpacityEffect(btn)
+        effect.setOpacity(0.4)
+        btn.setGraphicsEffect(effect)
 
     # ── histórico de alterações (Admin) ────────────────────────────
     def _setup_change_history_button(self):

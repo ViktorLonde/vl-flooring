@@ -31,9 +31,12 @@ from paginas.permissoes import PermissionsMixin
 from paginas.visual import VisualMixin, SIDEBAR_ITEMS
 from paginas.moderno import ModernMixin
 from paginas.tema import ThemeMixin
+from paginas.sessao import SessionMixin
+from PySide6.QtCore import Signal
 
 
 class MainWindow(
+    SessionMixin,
     ThemeMixin,
     ModernMixin,
     VisualMixin,
@@ -57,6 +60,9 @@ class MainWindow(
     ExpensesMixin,
     QMainWindow,
 ):
+    # Emitido ao escolher "Switch user" no menu do nome (app.py volta pro login)
+    signed_out = Signal()
+
     def __init__(self, db_config: dict | None = None):
         """Inicializa a janela principal: carrega a UI, guarda a config do banco, monta a sidebar animada, conecta todos os sinais e carrega os dados iniciais de cada modulo."""
         super().__init__()
@@ -102,6 +108,9 @@ class MainWindow(
         self._setup_icon_theme()
         self._setup_modern_ui()
         self._setup_theme_toggle()
+        self._setup_user_menu()
+        self._setup_customer_invoices_button()
+        self._setup_restore_backup_button()
         self._setup_dashboard_period_filter()
         self._setup_pnl_period_filter()
         self._setup_1099_year_filter()
@@ -128,6 +137,9 @@ class MainWindow(
     def closeEvent(self, event):
         """Pede confirmação antes de fechar o sistema, pra evitar sair sem
         querer e perder o que estava sendo digitado."""
+        if getattr(self, "_closing_for_sign_out", False):
+            event.accept()  # "Switch user": fecha sem perguntar
+            return
         confirm = QMessageBox.question(
             self,
             "Exit VL Flooring",
@@ -136,6 +148,7 @@ class MainWindow(
             QMessageBox.StandardButton.No,
         )
         if confirm == QMessageBox.StandardButton.Yes:
+            self.save_ui_state()
             event.accept()
         else:
             event.ignore()
@@ -451,6 +464,11 @@ class MainWindow(
                 self._expand_sidebar()
             else:
                 self._collapse_sidebar()
+
+        elif obj is self.ui.lbl_user:
+            if event.type() == QEvent.Type.MouseButtonPress:
+                self._show_user_menu()
+                return True
 
         elif obj is getattr(self, "_global_search", None):
             if self._global_search_key(event):
