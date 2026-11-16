@@ -82,6 +82,8 @@ def main():
     registro.install_default_save_folder()
     from paginas.visual import install_icon_theme
     install_icon_theme(app)
+    from paginas.moderno import install_modern_ui
+    install_modern_ui(app)
 
     if not wait_for_database():
         sys.exit(1)

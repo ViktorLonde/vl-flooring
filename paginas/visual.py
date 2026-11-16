@@ -256,17 +256,36 @@ class VisualMixin:
 
     def _convert_card_icons(self):
         """Troca os emojis dos cartões (💰 ✅ ⚠ …) por ícones num quadrado colorido."""
+        self._card_icon_labels = []
         for label in self.findChildren(QLabel):
             text = label.text().strip().replace("️", "")
             if text in LABEL_ICONS:
-                name, color, bg = LABEL_ICONS[text]
                 label.setText("")
-                label.setPixmap(tabler_icon(name, color, 22).pixmap(22, 22))
-                label.setFixedSize(40, 40)
+                label.setProperty("_vl_card_icon", LABEL_ICONS[text][0])
+                label.setFixedSize(32, 32)
                 label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                label.setStyleSheet(f"background-color: {bg}; border-radius: 10px; padding: 0px;")
+                label.setStyleSheet(f"background-color: {LABEL_ICONS[text][2]}; border-radius: 8px; padding: 0px;")
+                self._card_icon_labels.append((label, LABEL_ICONS[text]))
+                # Alguns cartões têm altura travada: abre espaço pro ícone não
+                # ficar por cima do valor.
+                card = label.parentWidget()
+                if card is not None and card.layout() is not None:
+                    card.layout().setSpacing(max(card.layout().spacing(), 6))
+                    needed = card.layout().sizeHint().height()
+                    if card.maximumHeight() < needed:
+                        card.setMaximumHeight(needed)
+                    card.setMinimumHeight(max(card.minimumHeight(), needed))
             elif text.startswith("📊 "):
                 label.setText(text[2:].strip())
+        self._refresh_card_icons()
+
+    def _refresh_card_icons(self):
+        """Redesenha os ícones dos cartões na cor certa do tema atual."""
+        from paginas import tema
+        for label, (name, color, _bg) in getattr(self, "_card_icon_labels", []):
+            if tema.is_dark():
+                color = tema.TEXT_MAP.get(color.upper(), color)
+            label.setPixmap(tabler_icon(name, color, 18).pixmap(18, 18))
 
     def _sidebar_label(self, attr, expanded, extra=""):
         """Texto do botão da sidebar: nome quando aberta, vazio quando fechada."""

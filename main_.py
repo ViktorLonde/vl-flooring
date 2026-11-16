@@ -29,9 +29,13 @@ from paginas.usuarios import UsersMixin
 from paginas.despesas import ExpensesMixin
 from paginas.permissoes import PermissionsMixin
 from paginas.visual import VisualMixin, SIDEBAR_ITEMS
+from paginas.moderno import ModernMixin
+from paginas.tema import ThemeMixin
 
 
 class MainWindow(
+    ThemeMixin,
+    ModernMixin,
     VisualMixin,
     PermissionsMixin,
     UtilsMixin,
@@ -96,6 +100,8 @@ class MainWindow(
         self._setup_incomplete_jobs_button()
         self._setup_change_history_button()
         self._setup_icon_theme()
+        self._setup_modern_ui()
+        self._setup_theme_toggle()
         self._setup_dashboard_period_filter()
         self._setup_pnl_period_filter()
         self._setup_1099_year_filter()
@@ -445,6 +451,10 @@ class MainWindow(
                 self._expand_sidebar()
             else:
                 self._collapse_sidebar()
+
+        elif obj is getattr(self, "_global_search", None):
+            if self._global_search_key(event):
+                return True
 
         elif obj is self.ui.Left_container:
             if event.type() == QEvent.Type.Enter:

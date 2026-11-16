@@ -37,7 +37,7 @@ try:
     REPORTLAB_AVAILABLE = True
 except ImportError:
     REPORTLAB_AVAILABLE = False
-from PySide6.QtGui import QColor, QDesktopServices, QTextCharFormat, QPixmap, QPainter, QBrush, QShortcut, QKeySequence
+from PySide6.QtGui import QPalette, QColor, QDesktopServices, QTextCharFormat, QPixmap, QPainter, QBrush, QShortcut, QKeySequence
 
 from ui_main_window_vl_flooring import Ui_MainWindow
 from passwords import hash_password
@@ -166,11 +166,13 @@ class _DonutChartWidget(QWidget):
             rect.y() + (side - hole_side) / 2.0,
             hole_side, hole_side,
         )
-        painter.setBrush(QBrush(QColor("#FFFFFF")))
+        # Cores do miolo seguem o tema (modo escuro → miolo escuro, número claro)
+        dark_theme = QApplication.palette().color(QPalette.ColorRole.Window).lightness() < 128
+        painter.setBrush(QBrush(QColor("#1B2533" if dark_theme else "#FFFFFF")))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawEllipse(hole_rect)
 
-        painter.setPen(QColor("#1C2B3A"))
+        painter.setPen(QColor("#E5E7EB" if dark_theme else "#1C2B3A"))
         font = painter.font()
         font.setBold(True)
         font.setPointSize(13)
