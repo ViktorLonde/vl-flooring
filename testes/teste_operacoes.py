@@ -141,6 +141,15 @@ try:
     past_ok = all(statuses[i] in ("COMPLETED", "CANCELLED") for i in code_ids if i != future_id)
     check("past days marked COMPLETED", past_ok, statuses)
     check("future day left untouched", statuses[future_id] == "PENDING")
+
+    # ── preço preenchido depois: materiais lançados a $0 recebem o preço ──
+    pid_m, prod = q("SELECT JOB_PROJECT_ID, PRODUCT_ID FROM job_materials LIMIT 1")[0] if q(
+        "SELECT COUNT(*) FROM job_materials")[0][0] else (None, None)
+    if prod:
+        cur.execute("UPDATE job_materials SET UNIT_PRICE=0 WHERE PRODUCT_ID=%s", (prod,))
+        w._fill_unpriced_job_materials(prod, 42.5)
+        prices = {float(p[0]) for p in q("SELECT UNIT_PRICE FROM job_materials WHERE PRODUCT_ID=%s", (prod,))}
+        check("unpriced materials get the new price", prices == {42.5}, prices)
 except Exception:
     traceback.print_exc(); ok = False
 finally:

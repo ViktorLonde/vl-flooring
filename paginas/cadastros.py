@@ -921,6 +921,35 @@ class RegistrationsMixin:
 
         self.ui.tabWidget_products_page.setCurrentWidget(self.ui.tab_product_form)
 
+    def _fill_unpriced_job_materials(self, product_id, price):
+        """Materiais lançados em jobs enquanto o produto estava sem preço
+        ficam com $0. Quando o preço é salvo, oferece preencher esses
+        lançamentos (o custo do job e o Job Profit passam a ficar certos)."""
+        if not product_id or not price:
+            return
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT COUNT(*), GROUP_CONCAT(DISTINCT jp.CODE ORDER BY jp.CODE SEPARATOR ', ') "
+                "FROM job_materials jm LEFT JOIN job_projects jp ON jp.ID = jm.JOB_PROJECT_ID "
+                "WHERE jm.PRODUCT_ID = %s AND COALESCE(jm.UNIT_PRICE, 0) = 0", (product_id,))
+            count, codes = cursor.fetchone()
+            if count:
+                answer = QMessageBox.question(
+                    self, "Fill in material cost",
+                    f"This product was added to {count} job material line(s) without a price ({codes}).\n\n"
+                    f"Use ${price:,.2f} for them now?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes)
+                if answer == QMessageBox.StandardButton.Yes:
+                    cursor.execute("UPDATE job_materials SET UNIT_PRICE = %s "
+                                   "WHERE PRODUCT_ID = %s AND COALESCE(UNIT_PRICE, 0) = 0", (price, product_id))
+                    conn.commit()
+            cursor.close()
+            conn.close()
+        except (MySQLError, RuntimeError):
+            logging.getLogger("vl_flooring").exception("could not fill unpriced job materials")
+
     def save_product_record(self):
         """Insere ou atualiza um registro em products."""
         name = self.ui.txt_product_name.text().strip()
@@ -986,6 +1015,8 @@ class RegistrationsMixin:
         except RuntimeError as e:
             QMessageBox.warning(self, "Driver Missing", str(e))
             return
+
+        self._fill_unpriced_job_materials(getattr(self, "_current_product_id", None), price)
 
         if not tax_column_saved:
             QMessageBox.information(
