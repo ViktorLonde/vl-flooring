@@ -402,7 +402,7 @@ class JobsMixin:
         table.setRowCount(len(rows))
 
         def yes_not(*ids):
-            return "Yes" if any(i is not None for i in ids) else "Not"
+            return "Yes" if any(i is not None for i in ids) else "No"
 
         for row_idx, row_data in enumerate(rows):
             (job_id, work_date, contractor, company, client, address,
@@ -851,29 +851,42 @@ class JobsMixin:
 
     def _update_days_worked_label(self):
         """Mostra, em destaque, quantos dias de trabalho já foram registrados
-        sob o código de projeto atual."""
+        sob o código de projeto atual. Parar o mouse em cima mostra a lista
+        dos dias (data e status) — inclusive os que estão fora do filtro de
+        datas da lista."""
         typed = self.ui.cmb_job_code.currentText().strip().upper()
         job_id = self._job_code_to_id.get(typed)
+        btn_complete = getattr(self, "_btn_complete_job", None)
 
         if not job_id:
             self.ui.lbl_days_worked_value.setText("—")
+            self.ui.lbl_days_worked_value.setToolTip("")
+            if btn_complete is not None:
+                btn_complete.setVisible(False)
             return
 
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT COUNT(DISTINCT WORK_DATE) FROM work_days WHERE JOB_PROJECT_ID = %s",
+                "SELECT ID, WORK_DATE, STATUS FROM work_days WHERE JOB_PROJECT_ID = %s ORDER BY WORK_DATE, ID",
                 (job_id,),
             )
-            days_count = cursor.fetchone()[0] or 0
+            day_rows = cursor.fetchall()
             cursor.close()
             conn.close()
         except (MySQLError, RuntimeError):
             self.ui.lbl_days_worked_value.setText("—")
             return
 
+        days_count = len({d for _i, d, _s in day_rows})
         self.ui.lbl_days_worked_value.setText(f"🗓 {days_count} day{'s' if days_count != 1 else ''}")
+        lines = [f"#{i}  {d.strftime('%m/%d/%Y') if d else '?'}  —  {JOB_STATUS_LABELS.get(st, st or '')}"
+                 for i, d, st in day_rows]
+        self.ui.lbl_days_worked_value.setToolTip(f"Days of {typed}:\n" + "\n".join(lines))
+        if btn_complete is not None:
+            open_days = [r for r in day_rows if r[2] not in ("COMPLETED", "CANCELLED")]
+            btn_complete.setVisible(bool(open_days))
 
     def _refresh_material_product_combo(self):
         """Popula o combo de produtos usado pra adicionar material gasto."""

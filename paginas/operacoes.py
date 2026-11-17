@@ -50,6 +50,108 @@ class OperationsMixin:
         self._setup_week_schedule_button()
         self._setup_profit_tab()
         self._setup_reminders_button()
+        self._setup_complete_job_button()
+
+    # ══ concluir o trabalho (todos os dias do Job Code) ══════════════
+    def _setup_complete_job_button(self):
+        btn = QPushButton("  Complete job")
+        btn.setObjectName("btn_complete_job")
+        btn.setIcon(tabler_icon("circle-check", "#15803D", 16))
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setToolTip("Mark the days of this Job Code as COMPLETED at once")
+        btn.setStyleSheet("QPushButton { background-color: #DCFCE7; color: #166534; border: 1px solid #86EFAC; "
+                          "border-radius: 6px; padding: 6px 10px; font-size: 12px; font-weight: 600; } "
+                          "QPushButton:hover { background-color: #BBF7D0; }")
+        btn.setVisible(False)
+        btn.clicked.connect(self.open_complete_job_dialog)
+        layout = self.ui.layout_job_code_field_row
+        layout.insertWidget(layout.indexOf(self.ui.lbl_days_worked_value) + 1, btn)
+        self._btn_complete_job = btn
+
+    def open_complete_job_dialog(self):
+        code = self.ui.cmb_job_code.currentText().strip().upper()
+        project_id = self._job_code_to_id.get(code)
+        if not project_id:
+            return
+        if getattr(self, "_job_form_dirty", False):
+            QMessageBox.information(self, "Save first", "Save the current changes before completing the job.")
+            return
+        try:
+            conn = self._get_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT ID, WORK_DATE, STATUS, VALUE FROM work_days WHERE JOB_PROJECT_ID=%s "
+                        "ORDER BY WORK_DATE, ID", (project_id,))
+            days = cur.fetchall()
+            cur.close()
+            conn.close()
+        except (MySQLError, RuntimeError) as e:
+            QMessageBox.critical(self, "Database Error", f"Could not load the days:\n{e}")
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Complete job {code}")
+        dialog.resize(520, 420)
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel(f"Tick the days of <b>{code}</b> that were finished. "
+                                "Future dates start unticked — check if they are correct."))
+        table = QTableWidget(len(days), 4)
+        table.setHorizontalHeaderLabels(["Complete", "Date", "Current status", "Value"])
+        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        today = date.today()
+        for r, (jid, wdate, status, value) in enumerate(days):
+            chk = QTableWidgetItem(f"#{jid}")
+            chk.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
+            done = status in ("COMPLETED", "CANCELLED")
+            future = bool(wdate and wdate > today)
+            chk.setCheckState(Qt.CheckState.Unchecked if (done or future) else Qt.CheckState.Checked)
+            if done:
+                chk.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            chk.setData(Qt.ItemDataRole.UserRole, jid)
+            table.setItem(r, 0, chk)
+            date_text = _fmt_date(wdate) + ("  (future date!)" if future else "")
+            for c, v in enumerate([date_text, JOB_STATUS_LABELS.get(status, status or ""),
+                                   f"${float(value or 0):,.2f}"], start=1):
+                table.setItem(r, c, QTableWidgetItem(v))
+        layout.addWidget(table, 1)
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        btn_cancel, btn_ok = QPushButton("Cancel"), QPushButton("Mark as COMPLETED")
+        btn_ok.setObjectName("btn_complete_job_confirm")
+        buttons.addWidget(btn_cancel)
+        buttons.addWidget(btn_ok)
+        layout.addLayout(buttons)
+        btn_cancel.clicked.connect(dialog.reject)
+
+        def apply():
+            ids = [table.item(r, 0).data(Qt.ItemDataRole.UserRole) for r in range(table.rowCount())
+                   if table.item(r, 0).checkState() == Qt.CheckState.Checked]
+            if not ids:
+                QMessageBox.information(dialog, "Nothing selected", "Tick at least one day.")
+                return
+            try:
+                conn = self._get_connection()
+                cur = conn.cursor()
+                cur.execute(f"UPDATE work_days SET STATUS='COMPLETED' WHERE ID IN ({','.join(['%s'] * len(ids))})", ids)
+                conn.commit()
+                cur.close()
+                conn.close()
+            except (MySQLError, RuntimeError) as e:
+                QMessageBox.critical(dialog, "Database Error", f"Could not update the days:\n{e}")
+                return
+            dialog.accept()
+            current = getattr(self, "_current_job_id", None)
+            self.load_work_days()
+            if current in ids:
+                self._loading_job_form = True
+                self._set_combo_by_data(self.ui.cmb_status_form, "COMPLETED", by_text=True)
+                self._loading_job_form = False
+                self._job_form_dirty = False
+            self._update_days_worked_label()
+            show_toast(f"{code}: {len(ids)} day{'s' if len(ids) != 1 else ''} marked as COMPLETED.", "success", self)
+
+        btn_ok.clicked.connect(apply)
+        dialog.exec()
 
     # ══ editar vários jobs ═══════════════════════════════════════════
     def _setup_bulk_edit(self):

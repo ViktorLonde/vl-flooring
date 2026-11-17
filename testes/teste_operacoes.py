@@ -119,6 +119,28 @@ try:
     # ── aviso de backup ──
     item = w._backup_attention_item()
     check("backup check runs", item is None or len(item) == 4, item[2] if item else "up to date")
+
+    # ── concluir o trabalho (todos os dias do Job Code) ──
+    code_pid = q("SELECT JOB_PROJECT_ID FROM work_days WHERE JOB_PROJECT_ID IS NOT NULL GROUP BY JOB_PROJECT_ID "
+                 "HAVING SUM(STATUS <> 'COMPLETED') >= 2 ORDER BY COUNT(*) DESC LIMIT 1")[0][0]
+    code_ids = [r[0] for r in q("SELECT ID FROM work_days WHERE JOB_PROJECT_ID=%s ORDER BY ID", (code_pid,))]
+    future_id = code_ids[-1]
+    cur.execute("UPDATE work_days SET WORK_DATE = CURDATE() + INTERVAL 20 DAY, STATUS='PENDING' WHERE ID=%s", (future_id,))
+    w._go_to_page(1, w.ui.btn_jobs)
+    w._open_job_by_id(code_ids[0], None); a.processEvents()
+    w._job_form_dirty = False
+    w._update_days_worked_label(); a.processEvents()
+    check("Complete job button visible", w._btn_complete_job.isVisible())
+    check("days tooltip lists the days", "#" in w.ui.lbl_days_worked_value.toolTip())
+
+    def complete(d):
+        next(b for b in d.findChildren(QPushButton) if b.objectName() == "btn_complete_job_confirm").click()
+    dialog_actions.append(complete)
+    w.open_complete_job_dialog(); a.processEvents()
+    statuses = dict(q("SELECT ID, STATUS FROM work_days WHERE JOB_PROJECT_ID=%s", (code_pid,)))
+    past_ok = all(statuses[i] in ("COMPLETED", "CANCELLED") for i in code_ids if i != future_id)
+    check("past days marked COMPLETED", past_ok, statuses)
+    check("future day left untouched", statuses[future_id] == "PENDING")
 except Exception:
     traceback.print_exc(); ok = False
 finally:
