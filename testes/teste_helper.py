@@ -48,6 +48,8 @@ try:
             "HAVING COUNT(*) >= 2 ORDER BY MAX(WORK_DATE) DESC LIMIT 1")[0][0]
     days = [r[0] for r in q("SELECT ID FROM work_days WHERE JOB_PROJECT_ID=%s ORDER BY ID", (pid,))]
     target, other = days[0], days[1]
+    # a cópia já pode ter equipe lançada pelo usuário: começa do zero nesses dias
+    cur.execute(f"DELETE FROM work_day_helpers WHERE WORK_DAY_ID IN ({','.join(map(str, days))})")
     work_date = q("SELECT WORK_DATE FROM work_days WHERE ID=%s", (target,))[0][0]
 
     from main_ import MainWindow

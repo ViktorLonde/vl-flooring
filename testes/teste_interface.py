@@ -85,6 +85,13 @@ w._go_to_page(5, ui.btn_nav_receivables); a.processEvents()
 w._toggle_dark_mode(); a.processEvents()
 check("dark mode off restores light style", not tema.is_dark() and w.styleSheet() == light_qss)
 
+# página Registrations com cartões
+ui.btn_registrations.click(); a.processEvents()
+check("Registrations opens the cards page", ui.Pages.currentIndex() == w._hub_index
+      and not ui.frame_registrations_submenu.isVisible())
+w._hub_cards["companies"].click(); a.processEvents()
+check("Companies card opens Companies", ui.Pages.currentIndex() == 2 and ui.btn_registrations.isChecked())
+
 check("no unexpected errors", not errors, errors[:1])
 settings.setValue("dark_mode", saved_dark)
 print("RESULT:", "ALL OK" if ok else "FAILED", flush=True)

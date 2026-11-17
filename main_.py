@@ -34,10 +34,12 @@ from paginas.tema import ThemeMixin
 from paginas.sessao import SessionMixin
 from paginas.operacoes import OperationsMixin
 from paginas.equipe import CrewMixin
+from paginas.hub import RegistrationsHubMixin
 from PySide6.QtCore import Signal
 
 
 class MainWindow(
+    RegistrationsHubMixin,
     CrewMixin,
     OperationsMixin,
     SessionMixin,
@@ -112,6 +114,7 @@ class MainWindow(
         self._setup_operations()
         self._setup_crew_ui()
         self._setup_helper_pay_tab()
+        self._setup_registrations_hub()
         self._setup_icon_theme()
         self._setup_modern_ui()
         self._setup_theme_toggle()
@@ -723,15 +726,19 @@ class MainWindow(
         for btn in sub_buttons:
             btn.setChecked(btn is active_btn)
 
-        # "Registrations" fica marcado quando qualquer uma das 4 sub-páginas está ativa
-        self.ui.btn_registrations.setChecked(index in (2, 3, 4, 8))
+        # "Registrations" fica marcado na página de cartões e nas 4 páginas de cadastro
+        hub_index = getattr(self, "_hub_index", -1)
+        self.ui.btn_registrations.setChecked(index in (2, 3, 4, 8, hub_index))
 
         titles = {
             0: "Dashboard", 1: "Job Records", 2: "Companies", 3: "Contractors",
             4: "Work Types", 5: "Receivables", 6: "Customer", 7: "User", 8: "Products",
-            9: "Settings",
+            9: "Settings", hub_index: "Registrations",
         }
         self.ui.Top_label.setText(titles.get(index, ""))
+
+        if index == hub_index:
+            self.refresh_registrations_hub()
 
         if index == 9:
             self.load_settings_form()

@@ -97,7 +97,8 @@ class SessionMixin:
         page = s.value("ui/last_page", 0, type=int)
         buttons = {0: self.ui.btn_home, 1: self.ui.btn_jobs, 2: self.ui.btn_reg_companies,
                    3: self.ui.btn_reg_contractors, 4: self.ui.btn_reg_work_types, 5: self.ui.btn_nav_receivables,
-                   6: self.ui.btn_customer, 7: self.ui.btn_user, 8: self.ui.btn_reg_products, 9: self.ui.btn_settings}
+                   6: self.ui.btn_customer, 7: self.ui.btn_user, 8: self.ui.btn_reg_products, 9: self.ui.btn_settings,
+                   getattr(self, "_hub_index", -1): self.ui.btn_registrations}
         if page in buttons and page != 0:
             self._go_to_page(page, buttons[page])
         tab = s.value("ui/receivables_tab", 0, type=int)

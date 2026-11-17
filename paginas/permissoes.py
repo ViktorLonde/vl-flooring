@@ -102,6 +102,8 @@ class PermissionsMixin:
             widget.setVisible(rules["admin_pages"])
         if hasattr(self, "_btn_change_history"):
             self._btn_change_history.setVisible(rules["admin_pages"])
+        if hasattr(self, "_apply_hub_role_rules"):
+            self._apply_hub_role_rules()
 
         # Relatórios financeiros
         extra_tabs = [getattr(ui, n) for n in ("tab_job_profit", "tab_helper_pay") if hasattr(ui, n)]
