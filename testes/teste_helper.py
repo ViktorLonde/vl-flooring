@@ -58,15 +58,34 @@ try:
     idx = w.ui.cmb_helper.findData(helper_id)
     check("helper appears in the Helper list", idx >= 0)
     w.ui.cmb_helper.setCurrentIndex(idx)
+    w.ui.dspn_helper_pay.setValue(150)
     msgs.clear(); w.save_job_record(); a.processEvents()
-    saved = q("SELECT HELPER_ID FROM work_days WHERE ID=%s", (target,))[0][0]
+    saved, pay = q("SELECT HELPER_ID, HELPER_PAY FROM work_days WHERE ID=%s", (target,))[0]
     check("helper saved on the job", saved == helper_id, (saved, msgs[-1:]))
+    check("helper pay saved", float(pay or 0) == 150.0, pay)
     check("helper NOT copied to other days of the code",
           q("SELECT HELPER_ID FROM work_days WHERE ID=%s", (other,))[0][0] in (None, 0))
 
     w._current_job_id = None
     w._open_job_by_id(target, work_date); a.processEvents()
     check("helper loads back into the form", w.ui.cmb_helper.currentData() == helper_id, w.ui.cmb_helper.currentText())
+    check("helper pay loads back", w.ui.dspn_helper_pay.value() == 150.0, w.ui.dspn_helper_pay.value())
+    w._job_form_dirty = False
+
+    # lucro do Job Code desconta o pagamento do helper
+    code = q("SELECT CODE FROM job_projects WHERE ID=%s", (pid,))[0][0]
+    w._profit_widgets[0].setCurrentIndex(3)  # All time
+    w.load_job_profit()
+    t = w._profit_widgets[2]
+    row = next(r for r in range(t.rowCount()) if t.item(r, 0).text() == code)
+    revenue = float(t.item(row, 3).data(256)); helper_col = float(t.item(row, 6).data(256))
+    profit = float(t.item(row, 7).data(256))
+    check("profit subtracts helper pay", helper_col == 150.0 and abs(profit - (revenue - 150.0)) < 0.01,
+          (revenue, helper_col, profit))
+
+    # New Job zera o pagamento
+    w.new_job_record(); a.processEvents()
+    check("new job starts with helper pay 0", w.ui.dspn_helper_pay.value() == 0)
     w._job_form_dirty = False
 
     from datetime import timedelta

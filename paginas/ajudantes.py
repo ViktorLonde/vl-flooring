@@ -41,6 +41,25 @@ class HelpersMixin:
         self.ui.cmb_helper.setStyleSheet(u"font: 9pt \"MS Shell Dlg 2\";")
         self.ui.grid_job_info.addWidget(self.ui.cmb_helper, 5, 0, 1, 1)
 
+        # Quanto o helper recebeu nesse dia — entra no lucro do job (aba
+        # Job Profit). Fica ao lado do Helper; só é salvo se a coluna
+        # HELPER_PAY existir no banco.
+        self.ui.lbl_helper_pay = QLabel(self.ui.frame_job_info_body)
+        self.ui.lbl_helper_pay.setObjectName(u"lbl_helper_pay")
+        self.ui.lbl_helper_pay.setText("HELPER PAY ($)")
+        self.ui.grid_job_info.addWidget(self.ui.lbl_helper_pay, 4, 1, 1, 1)
+        self.ui.dspn_helper_pay = QDoubleSpinBox(self.ui.frame_job_info_body)
+        self.ui.dspn_helper_pay.setObjectName(u"dspn_helper_pay")
+        self.ui.dspn_helper_pay.setMinimumSize(QSize(132, 36))
+        self.ui.dspn_helper_pay.setMaximumSize(QSize(132, 36))
+        self.ui.dspn_helper_pay.setStyleSheet(u"font: 9pt \"MS Shell Dlg 2\";")
+        self.ui.dspn_helper_pay.setDecimals(2)
+        self.ui.dspn_helper_pay.setMaximum(99999.99)
+        self.ui.dspn_helper_pay.setPrefix("$ ")
+        self.ui.dspn_helper_pay.setGroupSeparatorShown(True)
+        self.ui.dspn_helper_pay.setToolTip("How much the helper was paid for this day")
+        self.ui.grid_job_info.addWidget(self.ui.dspn_helper_pay, 5, 1, 1, 1)
+
     def open_helpers_manager_dialog(self):
         """Cadastro de Helpers: lista à esquerda/tabela em cima, formulário
         embaixo. Clica numa linha da tabela pra editar, ou preenche o

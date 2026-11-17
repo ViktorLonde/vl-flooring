@@ -1033,6 +1033,7 @@ class JobsMixin:
         self.ui.cmb_payment.setCurrentIndex(0)
         self.ui.cmb_contractor.setCurrentIndex(0)
         self.ui.cmb_helper.setCurrentIndex(0)
+        self.ui.dspn_helper_pay.setValue(0)
         self.ui.cmb_company_form.setCurrentIndex(0)
         self.ui.cmb_client_city.setCurrentIndex(0)
         self.ui.cmb_client_state.setCurrentIndex(0)
@@ -1154,6 +1155,7 @@ class JobsMixin:
         self._set_combo_by_data(self.ui.cmb_status_form, data.get("STATUS"), by_text=True)
         self._set_combo_by_data(self.ui.cmb_contractor, data.get("CONTRACTOR_ID"))
         self._set_combo_by_data(self.ui.cmb_helper, data.get("HELPER_ID"))
+        self.ui.dspn_helper_pay.setValue(float(data.get("HELPER_PAY") or 0))
         self._set_combo_by_data(self.ui.cmb_company_form, data.get("COMPANY_ID"))
         self._set_combo_by_data(self.ui.cmb_client_state, data.get("STATE_ID"))
         self._reload_city_combo_for_state(self.ui.cmb_client_city, data.get("STATE_ID"), keep_city_id=data.get("CITY_ID"))
@@ -1345,6 +1347,8 @@ class JobsMixin:
         # continua salvando normalmente (só não guarda o Helper ainda).
         if self._table_column_exists("work_days", "HELPER_ID"):
             data["HELPER_ID"] = self.ui.cmb_helper.currentData()
+        if self._table_column_exists("work_days", "HELPER_PAY"):
+            data["HELPER_PAY"] = self.ui.dspn_helper_pay.value() if data.get("HELPER_ID") else None
 
         # Tipos de trabalho: cada combo (ID) + seu spinbox de quantidade
         work_type_fields = [

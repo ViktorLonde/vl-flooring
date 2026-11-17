@@ -483,16 +483,16 @@ class OperationsMixin:
         summary = QLabel()
         summary.setStyleSheet("font-size:14px; font-weight:700; color:#1C2B3A; background:transparent;")
         layout.addWidget(summary)
-        table = QTableWidget(0, 8)
+        table = QTableWidget(0, 9)
         table.setHorizontalHeaderLabels(["Job Code", "Customer / Company", "Days", "Revenue",
-                                         "Expenses", "Materials", "Profit", "Margin"])
+                                         "Expenses", "Materials", "Helper pay", "Profit", "Margin"])
         table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         table.setSortingEnabled(True)
         table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         layout.addWidget(table, 1)
-        note = QLabel("Profit = revenue − expenses linked to the job − materials. "
-                      "Helper pay is not included (it isn't recorded per job yet).")
+        note = QLabel("Profit = revenue − expenses linked to the job − materials − helper pay "
+                      "(the HELPER PAY field of each day in Job Records).")
         note.setWordWrap(True)
         note.setStyleSheet("color:#6B7C93; font-size:11px; background:transparent;")
         layout.addWidget(note)
@@ -515,10 +515,12 @@ class OperationsMixin:
         try:
             conn = self._get_connection()
             cur = conn.cursor()
-            cur.execute("""
+            helper_pay_sql = ("COALESCE(SUM(wd.HELPER_PAY), 0)"
+                              if self._table_column_exists("work_days", "HELPER_PAY") else "0")
+            cur.execute(f"""
                 SELECT jp.ID, jp.CODE,
                        COALESCE(MAX(cl.FULL_NAME), MAX(co.COMPANY_NAME), MAX(NULLIF(ct.COMPANY_NAME, '')), MAX(ct.FULL_NAME), ''),
-                       COUNT(wd.ID), COALESCE(SUM(wd.VALUE), 0)
+                       COUNT(wd.ID), COALESCE(SUM(wd.VALUE), 0), {helper_pay_sql}
                 FROM job_projects jp
                 JOIN work_days wd ON wd.JOB_PROJECT_ID = jp.ID AND COALESCE(wd.STATUS, '') <> 'CANCELLED'
                 LEFT JOIN clients cl ON cl.ID = wd.CLIENT_ID
@@ -545,26 +547,27 @@ class OperationsMixin:
         table.setSortingEnabled(False)
         table.setRowCount(len(jobs))
         totals = [0.0, 0.0, 0.0]
-        for r, (pid, code, who, n_days, revenue) in enumerate(jobs):
-            revenue = float(revenue or 0)
+        for r, (pid, code, who, n_days, revenue, helper_pay) in enumerate(jobs):
+            revenue, helper_pay = float(revenue or 0), float(helper_pay or 0)
             exp, mat = expenses.get(pid, 0.0), materials.get(pid, 0.0)
-            profit = revenue - exp - mat
+            profit = revenue - exp - mat - helper_pay
             totals[0] += revenue
-            totals[1] += exp + mat
+            totals[1] += exp + mat + helper_pay
             totals[2] += profit
             margin = (profit / revenue * 100) if revenue else 0.0
             cells = [(code, None), (who, None), (str(n_days), n_days), (f"${revenue:,.2f}", revenue),
-                     (f"${exp:,.2f}", exp), (f"${mat:,.2f}", mat), (f"${profit:,.2f}", profit), (f"{margin:.0f}%", margin)]
+                     (f"${exp:,.2f}", exp), (f"${mat:,.2f}", mat), (f"${helper_pay:,.2f}", helper_pay),
+                     (f"${profit:,.2f}", profit), (f"{margin:.0f}%", margin)]
             for c, (text, sort_value) in enumerate(cells):
                 item = QTableWidgetItem(text)
                 if sort_value is not None:
                     item.setData(Qt.ItemDataRole.UserRole, sort_value)
                     item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                if c == 6 and profit < 0:
+                if c == 7 and profit < 0:
                     item.setForeground(QColor("#C62828"))
                 table.setItem(r, c, item)
         table.setSortingEnabled(True)
-        table.sortItems(6, Qt.SortOrder.DescendingOrder)
+        table.sortItems(7, Qt.SortOrder.DescendingOrder)
         margin = (totals[2] / totals[0] * 100) if totals[0] else 0
         summary.setText(f"{len(jobs)} job codes  ·  Revenue ${totals[0]:,.2f}  ·  Costs ${totals[1]:,.2f}  ·  "
                         f"Profit ${totals[2]:,.2f} ({margin:.0f}%)")

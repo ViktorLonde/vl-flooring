@@ -356,6 +356,9 @@ class ModernMixin:
             ui.lbl_helper.setText("HELPER")
             ui.lbl_helper.setStyleSheet(ui.lbl_contractor.styleSheet())
             ui.lbl_helper.setFont(ui.lbl_contractor.font())
+        if hasattr(ui, "lbl_helper_pay"):
+            ui.lbl_helper_pay.setStyleSheet(ui.lbl_contractor.styleSheet())
+            ui.lbl_helper_pay.setFont(ui.lbl_contractor.font())
 
     # atalhos
     def _setup_shortcuts(self):
