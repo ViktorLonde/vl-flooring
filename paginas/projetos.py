@@ -618,9 +618,11 @@ class ProjectsMixin:
             )
             days_count, min_date, max_date, total_value = cursor.fetchone()
 
+            helper_pay_sql = ("COALESCE(wd.HELPER_PAY, 0)"
+                              if self._table_column_exists("work_days", "HELPER_PAY") else "0")
             cursor.execute(
-                """
-                SELECT wd.WORK_DATE, COALESCE(c.COMPANY_NAME, c.FULL_NAME, '—'), wd.VALUE, wd.STATUS
+                f"""
+                SELECT wd.WORK_DATE, COALESCE(c.COMPANY_NAME, c.FULL_NAME, '—'), wd.VALUE, wd.STATUS, {helper_pay_sql}
                 FROM work_days wd
                 LEFT JOIN contractors c ON c.ID = wd.CONTRACTOR_ID
                 WHERE wd.JOB_PROJECT_ID = %s
@@ -632,7 +634,8 @@ class ProjectsMixin:
 
             cursor.execute(
                 """
-                SELECT COALESCE(p.NAME, '—'), jm.QUANTITY, COALESCE(p.UNIT, ''), jm.UNIT_PRICE
+                SELECT CONCAT(COALESCE(p.NAME, '—'), IF(COALESCE(p.BRAND, '') <> '', CONCAT(' (', p.BRAND, ')'), '')),
+                       jm.QUANTITY, COALESCE(p.UNIT, ''), jm.UNIT_PRICE
                 FROM job_materials jm
                 LEFT JOIN products p ON p.ID = jm.PRODUCT_ID
                 WHERE jm.JOB_PROJECT_ID = %s
@@ -661,8 +664,27 @@ class ProjectsMixin:
 
         dialog = QDialog(self)
         dialog.setWindowTitle(f"Project {job_code}")
-        dialog.resize(600, 780)
-        layout = QVBoxLayout(dialog)
+        available = self.screen().availableGeometry() if self.screen() else None
+        dialog.resize(860, min(880, available.height() - 60) if available else 780)
+        # Conteúdo dentro de uma área com rolagem: as tabelas mostram todas as
+        # linhas (antes ficavam presas em 2-3 linhas e cortavam o resto).
+        outer_layout = QVBoxLayout(dialog)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(16, 14, 16, 14)
+        scroll.setWidget(content)
+        outer_layout.addWidget(scroll)
+
+        def fit_rows(table, max_rows=12):
+            """Altura da tabela = cabeçalho + linhas (até max_rows; depois rola)."""
+            rows = min(max(table.rowCount(), 1), max_rows)
+            row_h = max(table.verticalHeader().defaultSectionSize(), 38)
+            header_h = max(table.horizontalHeader().sizeHint().height(), 46)  # cabeçalho já com o estilo do app
+            table.setFixedHeight(header_h + rows * row_h + 8)
 
         layout.addWidget(QLabel(f"<b>Job Code:</b> {job_code}"))
         layout.addWidget(QLabel(f"<b>Client:</b> {client_name} &nbsp;&nbsp; <b>Company:</b> {company_name}"))
@@ -688,37 +710,52 @@ class ProjectsMixin:
 
         layout.addWidget(QLabel("<b>Jobs Under This Code</b>"))
         table_jobs = QTableWidget()
-        table_jobs.setColumnCount(4)
-        table_jobs.setHorizontalHeaderLabels(["Date", "Contractor", "Value", "Status"])
+        table_jobs.setColumnCount(5)
+        table_jobs.setHorizontalHeaderLabels(["Date", "Contractor", "Value", "Helper pay", "Status"])
         table_jobs.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        table_jobs.horizontalHeader().setStretchLastSection(True)
-        table_jobs.setMaximumHeight(180)
+        table_jobs.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         table_jobs.setRowCount(len(job_rows))
-        for r, (wdate, cname, val, status) in enumerate(job_rows):
+        helper_pay_total = 0.0
+        for r, (wdate, cname, val, status, helper_pay) in enumerate(job_rows):
+            helper_pay_total += float(helper_pay or 0)
             date_str = wdate.strftime("%m/%d/%Y") if isinstance(wdate, date) else str(wdate)
             for c, text in enumerate([date_str, cname, f"${float(val or 0):,.2f}",
+                                       f"${float(helper_pay or 0):,.2f}" if helper_pay else "—",
                                        JOB_STATUS_LABELS.get(status, status)]):
                 table_jobs.setItem(r, c, QTableWidgetItem(text))
+        fit_rows(table_jobs)
         layout.addWidget(table_jobs)
 
         layout.addWidget(QLabel("<b>Materials Used</b>"))
         table_materials = QTableWidget()
-        table_materials.setColumnCount(3)
-        table_materials.setHorizontalHeaderLabels(["Product", "Qty", "Unit"])
+        table_materials.setColumnCount(5)
+        table_materials.setHorizontalHeaderLabels(["Product", "Qty", "Unit", "Unit price", "Total"])
         table_materials.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        table_materials.horizontalHeader().setStretchLastSection(True)
-        table_materials.setMaximumHeight(140)
+        table_materials.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         table_materials.setRowCount(len(material_rows))
         material_cost_total = 0.0
+        unpriced = 0
         for r, (pname, qty, unit, unit_price) in enumerate(material_rows):
-            qty = float(qty or 0)
-            material_cost_total += qty * float(unit_price or 0)
-            for c, text in enumerate([pname, f"{qty:g}", unit]):
-                table_materials.setItem(r, c, QTableWidgetItem(text))
+            qty, unit_price = float(qty or 0), float(unit_price or 0)
+            line_total = qty * unit_price
+            material_cost_total += line_total
+            unpriced += 0 if unit_price else 1
+            for c, text in enumerate([pname, f"{qty:g}", unit,
+                                       f"${unit_price:,.2f}" if unit_price else "no price",
+                                       f"${line_total:,.2f}"]):
+                item = QTableWidgetItem(text)
+                if c == 0:
+                    item.setToolTip(pname)
+                table_materials.setItem(r, c, item)
+        fit_rows(table_materials, 8)
         layout.addWidget(table_materials)
-
-        if project_type == "PRIVATE":
-            layout.addWidget(QLabel(f"<b>Total Material Cost:</b> ${material_cost_total:,.2f}"))
+        material_note = f"<b>Total Material Cost:</b> ${material_cost_total:,.2f}"
+        if unpriced:
+            material_note += (f" &nbsp;<span style='color:#B26A00;'>({unpriced} item(s) without price — "
+                              "set the price in Registrations → Products)</span>")
+        lbl_material_total = QLabel(material_note)
+        lbl_material_total.setWordWrap(True)
+        layout.addWidget(lbl_material_total)
 
         # ── Expenses vinculadas a este projeto (job_costing) ──────────
         expense_total = sum(float(amount or 0) for (_edate, _cat, _desc, amount) in expense_rows)
@@ -730,15 +767,17 @@ class ProjectsMixin:
             table_expenses_linked.setHorizontalHeaderLabels(["Date", "Category", "Description", "Amount"])
             table_expenses_linked.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
             table_expenses_linked.horizontalHeader().setStretchLastSection(True)
-            table_expenses_linked.setMaximumHeight(140)
+            table_expenses_linked.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
             table_expenses_linked.setRowCount(len(expense_rows))
             for r, (edate, category, description, amount) in enumerate(expense_rows):
                 date_str = edate.strftime("%m/%d/%Y") if isinstance(edate, date) else str(edate or "")
                 values = [date_str, category or "", description or "", f"${float(amount or 0):,.2f}"]
                 for c, text in enumerate(values):
                     table_expenses_linked.setItem(r, c, QTableWidgetItem(text))
+            fit_rows(table_expenses_linked, 8)
             layout.addWidget(table_expenses_linked)
             if not expense_rows:
+                table_expenses_linked.setVisible(False)  # o aviso abaixo já explica
                 lbl_no_expenses = QLabel(
                     "No expenses linked to this project yet — pick this Job Code in the "
                     "'Job Code (optional)' field on the Expenses tab to link one."
@@ -757,11 +796,12 @@ class ProjectsMixin:
 
         # ── Budget x Actual (orçado x realizado) ──────────────────────
         layout.addWidget(QLabel(""))
-        actual_cost = material_cost_total + expense_total
+        actual_cost = material_cost_total + expense_total + helper_pay_total
         estimated_profit = float(total_value or 0) - actual_cost
 
         def variance_html(budget_value):
-            lines = [f"<b>Actual Cost</b> (materials + linked expenses): ${actual_cost:,.2f}"]
+            lines = [f"<b>Actual Cost</b> (materials ${material_cost_total:,.2f} + expenses ${expense_total:,.2f} "
+                     f"+ helper pay ${helper_pay_total:,.2f}): ${actual_cost:,.2f}"]
             if budget_value:
                 variance = budget_value - actual_cost
                 color = "#C62828" if variance < 0 else "#2E7D32"
@@ -873,7 +913,7 @@ class ProjectsMixin:
                     cell.fill = header_fill
                     cell.alignment = Alignment(horizontal="center")
                 for r in range(table_jobs.rowCount()):
-                    ws_jobs.append([table_jobs.item(r, c).text() for c in range(4)])
+                    ws_jobs.append([table_jobs.item(r, c).text() for c in (0, 1, 2, 4)])  # sem Helper pay (custo interno)
                 for c in range(1, 5):
                     ws_jobs.column_dimensions[get_column_letter(c)].width = 18
 
@@ -940,7 +980,7 @@ class ProjectsMixin:
 
                 jobs_data = [["Date", "Contractor", "Value", "Status"]]
                 for r in range(table_jobs.rowCount()):
-                    jobs_data.append([table_jobs.item(r, c).text() for c in range(4)])
+                    jobs_data.append([table_jobs.item(r, c).text() for c in (0, 1, 2, 4)])  # sem Helper pay (custo interno)
                 jobs_table_pdf = Table(jobs_data, colWidths=[1.1 * inch, 2.0 * inch, 1.1 * inch, 1.4 * inch],
                                         repeatRows=1)
                 jobs_table_pdf.setStyle(TableStyle([
