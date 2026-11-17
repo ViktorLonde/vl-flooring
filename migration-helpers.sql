@@ -1,4 +1,10 @@
 -- ============================================================
+-- APLICADO em 2026-11-16 (pelo app/Claude). O MySQL 8.0 NÃO aceita
+-- "ADD COLUMN IF NOT EXISTS" (é sintaxe do MariaDB), por isso este
+-- arquivo nunca tinha funcionado. Não precisa rodar de novo.
+-- ============================================================
+
+-- ============================================================
 -- Helpers — cadastro de ajudantes de obra + vínculo com o Job
 --
 -- Rode no MESMO banco que o app usa de verdade
