@@ -12,9 +12,9 @@ Emite login_successful(username) quando a senha confere.
 import os
 
 import mysql.connector
-from PySide6.QtCore import Qt, QPropertyAnimation, QRectF, Signal
+from PySide6.QtCore import Qt, QPropertyAnimation, QRectF, QSettings, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPixmap, QLinearGradient
-from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
+from PySide6.QtWidgets import (QApplication, QCheckBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
                                QPushButton, QVBoxLayout, QWidget)
 
 import company_settings
@@ -160,6 +160,12 @@ class LoginWindow(QMainWindow):
         outer.addWidget(self.txt_password)
         outer.addSpacing(8)
 
+        # "Remember me": guarda só o NOME de usuário neste computador (nunca a senha)
+        self.chk_remember = QCheckBox("Remember my username")
+        self.chk_remember.setStyleSheet("color:#6B7C93; font-size:12px;")
+        outer.addWidget(self.chk_remember)
+        outer.addSpacing(4)
+
         self.lbl_error = QLabel("")
         self.lbl_error.setObjectName("login_error")
         self.lbl_error.setWordWrap(True)
@@ -193,7 +199,14 @@ class LoginWindow(QMainWindow):
         self.anim.setStartValue(0)
         self.anim.setEndValue(1)
         self.anim.start()
-        self.txt_user.setFocus()
+        settings = QSettings("VL Flooring", "app")
+        remembered = settings.value("login/username", "", type=str)
+        self.chk_remember.setChecked(bool(remembered) or not settings.contains("login/username"))
+        if remembered:
+            self.txt_user.setText(remembered)
+            self.txt_password.setFocus()
+        else:
+            self.txt_user.setFocus()
 
     def toggle_password(self):
         """Mostra/oculta a senha e troca o ícone."""
@@ -244,6 +257,8 @@ class LoginWindow(QMainWindow):
             cursor.close()
             conn.close()
 
+            QSettings("VL Flooring", "app").setValue(
+                "login/username", user if self.chk_remember.isChecked() else "")
             self.login_successful.emit(user)  # envia o nome do usuário para a main window
 
         except Exception as e:

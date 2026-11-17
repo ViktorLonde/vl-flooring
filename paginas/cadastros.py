@@ -789,6 +789,9 @@ class RegistrationsMixin:
             query += " AND (NAME LIKE %s OR TYPE LIKE %s OR BRAND LIKE %s)"
             like = f"%{search_text}%"
             params.extend([like, like, like])
+        chk_no_price = getattr(self, "_chk_products_no_price", None)
+        if chk_no_price is not None and chk_no_price.isChecked():
+            query += " AND COALESCE(PRICE, 0) = 0"
         query += " ORDER BY TYPE, NAME"
 
         try:
@@ -807,6 +810,43 @@ class RegistrationsMixin:
 
         self._populate_products_table(rows)
         self._refresh_product_unit_completer()
+        self._update_products_no_price_hint()
+
+    def _setup_products_no_price_filter(self):
+        """Caixa "Only without price" + aviso de quantos produtos estão sem
+        preço (material sem preço deixa o custo e o lucro do job errados)."""
+        chk = QCheckBox("Only without price")
+        chk.setObjectName("chk_products_no_price")
+        chk.toggled.connect(lambda _c: self.load_products())
+        self.ui.layout_products_toolbar.addWidget(chk)
+        self._chk_products_no_price = chk
+        lbl = QLabel()
+        lbl.setObjectName("lbl_products_no_price")
+        lbl.setStyleSheet("color:#B26A00; font-weight:600; background:transparent;")
+        self.ui.layout_products_toolbar.addWidget(lbl)
+        self._lbl_products_no_price = lbl
+
+    def _update_products_no_price_hint(self):
+        lbl = getattr(self, "_lbl_products_no_price", None)
+        if lbl is None:
+            return
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM products WHERE COALESCE(PRICE, 0) = 0")
+            n = cursor.fetchone()[0] or 0
+            cursor.close()
+            conn.close()
+        except (MySQLError, RuntimeError):
+            return
+        lbl.setText(f"⚠ {n} product{'s' if n != 1 else ''} without price" if n else "")
+        # na tabela, o preço $0.00 aparece em laranja
+        table = self.ui.table_products
+        for r in range(table.rowCount()):
+            item = table.item(r, 4)
+            if item and item.text().startswith("$0.00"):
+                item.setForeground(QColor("#B26A00"))
+                item.setToolTip("No price yet — the material cost of the jobs will be $0")
 
     def _populate_products_table(self, rows):
         """Preenche a tabela de Products linha a linha."""

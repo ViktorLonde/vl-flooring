@@ -59,11 +59,18 @@ _TOOL_CARDS = [
      "btn_reg_receipt_inbox", None),
     ("job_site", "map-pin", "Job Site Inbox", "Job site visits from e-mail",
      "btn_reg_job_site_inbox", "SELECT COUNT(*) FROM job_site_visits"),
+    ("estimates", "receipt", "Estimates", "Quotes with PDF — convert to a job",
+     "btn_tool_estimates", "SELECT COUNT(*) FROM estimates WHERE STATUS IN ('DRAFT','SENT','APPROVED')"),
+    ("calculator", "calculator", "Material Calculator", "Boxes and buckets for an area",
+     "btn_tool_calculator", None),
+    ("mileage", "car", "Mileage", "Business miles for the tax deduction",
+     "btn_tool_mileage", "SELECT COALESCE(ROUND(SUM(MILES)), 0) FROM mileage WHERE YEAR(TRIP_DATE) = YEAR(CURDATE())"),
 ]
 _COUNT_LABELS = {
     "companies": "registered", "contractors": "registered", "helpers": "registered",
     "work_types": "registered", "products": "registered", "projects": "job codes",
     "documents": "files", "bank": "unmatched", "job_site": "visits",
+    "estimates": "open", "mileage": "miles this year",
 }
 
 

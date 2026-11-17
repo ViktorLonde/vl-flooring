@@ -35,10 +35,12 @@ from paginas.sessao import SessionMixin
 from paginas.operacoes import OperationsMixin
 from paginas.equipe import CrewMixin
 from paginas.hub import RegistrationsHubMixin
+from paginas.ferramentas import ToolsMixin
 from PySide6.QtCore import Signal
 
 
 class MainWindow(
+    ToolsMixin,
     RegistrationsHubMixin,
     CrewMixin,
     OperationsMixin,
@@ -114,6 +116,8 @@ class MainWindow(
         self._setup_operations()
         self._setup_crew_ui()
         self._setup_helper_pay_tab()
+        self._setup_products_no_price_filter()
+        self._setup_tools()
         self._setup_registrations_hub()
         self._setup_icon_theme()
         self._setup_modern_ui()

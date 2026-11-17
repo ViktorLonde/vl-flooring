@@ -28,9 +28,21 @@ class JobsMixin:
     def _go_to_new_expense_from_job(self):
         """Atalho no formulário de Job: leva direto pra tela New/Edit Expense
         (dentro de Receivables), já pronta pra um novo lançamento."""
+        # Guarda o Job Code e a data ANTES de trocar de página: a despesa já
+        # nasce ligada a este job (antes vinha sem Job Code, e o Job Profit /
+        # View Project nunca descontavam despesas lançadas por aqui).
+        typed_code = self.ui.cmb_job_code.currentText().strip().upper()
+        project_id = self._job_code_to_id.get(typed_code)
+        work_date = self.ui.date_work_date.date()
         self.new_expense_record()
         self._go_to_page(5, self.ui.btn_nav_receivables)
         self.ui.tabWidget_receivables.setCurrentWidget(self.ui.tab_expenses_master)
+        if project_id:
+            self._refresh_expense_job_code_combo()
+            self._set_combo_by_data(self.ui.cmb_expense_job_code, project_id)
+            self.ui.date_expense.setDate(work_date)
+            from paginas.moderno import show_toast
+            show_toast(f"New expense linked to {typed_code}.", "info", self)
 
     def _setup_job_form_dirty_tracking(self):
         """Conecta todos os campos do formulário New/Edit Job (incluindo a
@@ -889,6 +901,8 @@ class JobsMixin:
         if btn_complete is not None:
             open_days = [r for r in day_rows if r[2] not in ("COMPLETED", "CANCELLED")]
             btn_complete.setVisible(bool(open_days))
+        if hasattr(self, "_refresh_photos_button"):
+            self._refresh_photos_button()
 
     def _refresh_material_product_combo(self):
         """Popula o combo de produtos usado pra adicionar material gasto."""
