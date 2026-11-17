@@ -397,6 +397,10 @@ class OperationsMixin:
                         values["VALUE"] = 0
                     cur.execute(f"INSERT INTO work_days ({', '.join(cols)}) VALUES ({', '.join(['%s'] * len(cols))})",
                                 [values[c] for c in cols])
+                    if self._crew_table_ready():  # a cópia leva a mesma equipe
+                        cur.execute("INSERT INTO work_day_helpers (WORK_DAY_ID, HELPER_ID, PAY) "
+                                    "SELECT %s, HELPER_ID, PAY FROM work_day_helpers WHERE WORK_DAY_ID=%s",
+                                    (cur.lastrowid, job_id))
                     created += 1
                 conn.commit()
                 cur.close()
@@ -434,7 +438,12 @@ class OperationsMixin:
         has_helper = cur.fetchone() is not None
         cur.execute("SELECT ID, NAME FROM work_types")
         wt_names = {r["ID"]: r["NAME"] for r in cur.fetchall()}
-        helper_sql = ("(SELECT h.FULL_NAME FROM helpers h WHERE h.ID = wd.HELPER_ID)" if has_helper else "NULL")
+        if self._crew_table_ready():
+            helper_sql = ("(SELECT GROUP_CONCAT(COALESCE(NULLIF(he.FULL_NAME, ''), he.COMPANY_NAME) "
+                          "ORDER BY x.ID SEPARATOR ', ') FROM work_day_helpers x "
+                          "JOIN helpers he ON he.ID = x.HELPER_ID WHERE x.WORK_DAY_ID = wd.ID)")
+        else:
+            helper_sql = ("(SELECT h.FULL_NAME FROM helpers h WHERE h.ID = wd.HELPER_ID)" if has_helper else "NULL")
         cur.execute(f"""
             SELECT wd.*, jp.CODE AS JOB_CODE, ci.CITY AS CITY_NAME, cl.FULL_NAME AS CLIENT_NAME,
                    co.COMPANY_NAME AS COMPANY_NAME, COALESCE(NULLIF(ct.COMPANY_NAME, ''), ct.FULL_NAME) AS CONTRACTOR_NAME,
@@ -477,7 +486,8 @@ class OperationsMixin:
                 code = f" ({r['JOB_CODE']})" if r.get("JOB_CODE") else ""
                 lines.append(f"• {place}{code}")
                 details = " · ".join(x for x in (who, r.get("WORK_TYPES"),
-                                                 f"Helper: {r['HELPER_NAME']}" if r.get("HELPER_NAME") else "") if x)
+                                                 (f"Helpers: {r['HELPER_NAME']}" if "," in r["HELPER_NAME"]
+                                                  else f"Helper: {r['HELPER_NAME']}") if r.get("HELPER_NAME") else "") if x)
                 if details:
                     lines.append(f"   {details}")
             lines.append("")

@@ -104,7 +104,8 @@ class PermissionsMixin:
             self._btn_change_history.setVisible(rules["admin_pages"])
 
         # Relatórios financeiros
-        for tab in [ui.tab_pnl, ui.tab_1099] + ([ui.tab_job_profit] if hasattr(ui, "tab_job_profit") else []):
+        extra_tabs = [getattr(ui, n) for n in ("tab_job_profit", "tab_helper_pay") if hasattr(ui, n)]
+        for tab in [ui.tab_pnl, ui.tab_1099] + extra_tabs:
             ui.tabWidget_receivables.setTabVisible(ui.tabWidget_receivables.indexOf(tab), rules["finance"])
 
         read_only_tip = "Your user has read-only access."

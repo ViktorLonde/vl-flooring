@@ -353,7 +353,7 @@ class ModernMixin:
                     if field.maximumHeight() < 36 or field.maximumHeight() > 40:
                         field.setMaximumHeight(38)
         if hasattr(ui, "lbl_helper"):
-            ui.lbl_helper.setText("HELPER")
+            ui.lbl_helper.setText("HELPERS")
             ui.lbl_helper.setStyleSheet(ui.lbl_contractor.styleSheet())
             ui.lbl_helper.setFont(ui.lbl_contractor.font())
         if hasattr(ui, "lbl_helper_pay"):

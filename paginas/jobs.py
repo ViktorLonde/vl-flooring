@@ -813,6 +813,8 @@ class JobsMixin:
             self._set_combo_by_data(self.ui.cmb_contractor, contractor_id)
         if helper_id:
             self._set_combo_by_data(self.ui.cmb_helper, helper_id)
+        # mesma equipe do último dia desse Job Code (dá pra mudar no botão Helpers)
+        self._load_crew_from_latest_day(job_id)
         if state_id:
             self._set_combo_by_data(self.ui.cmb_client_state, state_id)
             self._reload_city_combo_for_state(self.ui.cmb_client_city, state_id, keep_city_id=city_id)
@@ -1046,7 +1048,7 @@ class JobsMixin:
         self.ui.cmb_payment.setCurrentIndex(0)
         self.ui.cmb_contractor.setCurrentIndex(0)
         self.ui.cmb_helper.setCurrentIndex(0)
-        self.ui.dspn_helper_pay.setValue(0)
+        self._reset_job_helpers()
         self.ui.cmb_company_form.setCurrentIndex(0)
         self.ui.cmb_client_city.setCurrentIndex(0)
         self.ui.cmb_client_state.setCurrentIndex(0)
@@ -1168,7 +1170,7 @@ class JobsMixin:
         self._set_combo_by_data(self.ui.cmb_status_form, data.get("STATUS"), by_text=True)
         self._set_combo_by_data(self.ui.cmb_contractor, data.get("CONTRACTOR_ID"))
         self._set_combo_by_data(self.ui.cmb_helper, data.get("HELPER_ID"))
-        self.ui.dspn_helper_pay.setValue(float(data.get("HELPER_PAY") or 0))
+        self._load_job_helpers(data.get("ID"), data)
         self._set_combo_by_data(self.ui.cmb_company_form, data.get("COMPANY_ID"))
         self._set_combo_by_data(self.ui.cmb_client_state, data.get("STATE_ID"))
         self._reload_city_combo_for_state(self.ui.cmb_client_city, data.get("STATE_ID"), keep_city_id=data.get("CITY_ID"))
@@ -1358,10 +1360,14 @@ class JobsMixin:
         # HELPER_ID só entra no INSERT/UPDATE se a coluna já existir —
         # assim, se a migração do Helpers ainda não rodou, o resto do Job
         # continua salvando normalmente (só não guarda o Helper ainda).
+        # Equipe do dia (botão Helpers): em work_days fica só o resumo —
+        # primeiro helper e soma dos pagamentos; a lista completa vai para
+        # work_day_helpers logo depois do INSERT/UPDATE (paginas/equipe.py).
+        crew_first, crew_total = self._crew_summary_fields()
         if self._table_column_exists("work_days", "HELPER_ID"):
-            data["HELPER_ID"] = self.ui.cmb_helper.currentData()
+            data["HELPER_ID"] = crew_first
         if self._table_column_exists("work_days", "HELPER_PAY"):
-            data["HELPER_PAY"] = self.ui.dspn_helper_pay.value() if data.get("HELPER_ID") else None
+            data["HELPER_PAY"] = crew_total
 
         # Tipos de trabalho: cada combo (ID) + seu spinbox de quantidade
         work_type_fields = [
@@ -1436,6 +1442,7 @@ class JobsMixin:
                 query = f"INSERT INTO work_days ({cols}) VALUES ({placeholders})"
                 cursor.execute(query, list(data.values()))
             saved_job_id = self._current_job_id or cursor.lastrowid
+            self._save_job_helpers(cursor, saved_job_id)
 
             other_days_updated = 0
             if shared_changes:

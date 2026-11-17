@@ -33,10 +33,12 @@ from paginas.moderno import ModernMixin
 from paginas.tema import ThemeMixin
 from paginas.sessao import SessionMixin
 from paginas.operacoes import OperationsMixin
+from paginas.equipe import CrewMixin
 from PySide6.QtCore import Signal
 
 
 class MainWindow(
+    CrewMixin,
     OperationsMixin,
     SessionMixin,
     ThemeMixin,
@@ -108,6 +110,8 @@ class MainWindow(
         self._setup_incomplete_jobs_button()
         self._setup_change_history_button()
         self._setup_operations()
+        self._setup_crew_ui()
+        self._setup_helper_pay_tab()
         self._setup_icon_theme()
         self._setup_modern_ui()
         self._setup_theme_toggle()
