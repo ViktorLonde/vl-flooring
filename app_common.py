@@ -213,6 +213,7 @@ WORK_TYPE_CATEGORY_LABELS = {
     "PREPARATION": "Preparation",
     "OTHERS": "Others",
     "REPARO": "Repair",
+    "DELIVERY": "Delivery",
 }
 
 if REPORTLAB_AVAILABLE:

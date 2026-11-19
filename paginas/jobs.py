@@ -561,6 +561,9 @@ class JobsMixin:
             print(f"[Aviso] Não foi possível carregar combos: {e}")
         finally:
             self._loading_job_form = was_loading
+        # catálogo da lista de Work Types (pega serviços/categorias novos)
+        if hasattr(self, "_reload_work_type_catalog") and hasattr(self, "_wt_rows"):
+            self._reload_work_type_catalog()
 
     def _on_new_job_button_clicked(self):
         """Chamado pelo botão '+ New Job': confirma antes de limpar o

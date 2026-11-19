@@ -117,6 +117,24 @@ try:
     w._wt_rows[0]["widget"].findChildren(QPushButton)[-1].click(); a.processEvents()
     check("remove button drops a line", len(w._get_work_type_list()) == before - 1)
     w._job_form_dirty = False
+
+    # categoria Delivery: aparece na lista, salva só na tabela nova, sai na invoice
+    delivery = q("SELECT ID FROM work_types WHERE CATEGORY='DELIVERY' ORDER BY ID LIMIT 1")
+    check("Delivery work types exist", bool(delivery))
+    if delivery:
+        w._current_job_id = None
+        w._open_job_by_id(wid, wdate); a.processEvents()
+        row = w._add_work_type_row("DELIVERY", delivery[0][0], 3)
+        cats = [row["cat"].itemData(i) for i in range(row["cat"].count())]
+        check("Delivery is in the category list", "DELIVERY" in cats, cats)
+        w.save_job_record(); a.processEvents()
+        saved = q("SELECT CATEGORY, QTY FROM work_day_work_types WHERE WORK_DAY_ID=%s AND WORK_TYPE_ID=%s",
+                  (wid, delivery[0][0]))
+        check("Delivery line saved", saved and saved[0][0] == "DELIVERY" and float(saved[0][1]) == 3, saved)
+        rows = w._fetch_invoice_jobs(cur, "ID", wid, wdate, wdate, "clients", "CLIENT_ID", "FULL_NAME")
+        lines = w._describe_work_type_list(w._invoice_work_type_lists.get(wid, []), w._get_work_type_lookup(cur), True)
+        check("invoice shows the Delivery line", any(l.startswith("Delivery:") for l in lines), lines[-1:])
+        w._job_form_dirty = False
     db.close()
 except Exception:
     traceback.print_exc(); ok = False

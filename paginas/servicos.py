@@ -21,7 +21,8 @@ from app_common import *  # noqa: F401,F403
 from paginas.visual import tabler_icon
 
 CATEGORIES = [("DEMOLITION", "Demolition"), ("INSTALLATION", "Installation"), ("PREPARATION", "Preparation"),
-              ("OTHERS", "Others"), ("REPARO", "Repair")]
+              ("DELIVERY", "Delivery"), ("OTHERS", "Others"), ("REPARO", "Repair")]
+# DELIVERY não tem colunas antigas em work_days: fica só na lista (work_day_work_types)
 # quantos serviços de cada categoria cabem nas colunas antigas de work_days
 _FIXED_SLOTS = {"DEMOLITION": 4, "INSTALLATION": 4, "PREPARATION": 4, "OTHERS": 2, "REPARO": 2}
 
@@ -100,6 +101,10 @@ class WorkTypeListMixin:
         self._wt_rows = []
         self._wt_catalog = {}
         self._reload_work_type_catalog()
+        # categoria nova também na tela de cadastro de Work Types
+        combo = getattr(ui, "cmb_work_type_category", None)
+        if combo is not None and combo.findText("DELIVERY") < 0:
+            combo.insertItem(combo.findText("OTHERS") if combo.findText("OTHERS") >= 0 else combo.count(), "DELIVERY")
         self._refresh_work_type_list_state()
 
     def _reload_work_type_catalog(self):
