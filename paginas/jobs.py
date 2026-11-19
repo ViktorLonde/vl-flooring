@@ -908,7 +908,7 @@ class JobsMixin:
         """Popula o combo de produtos usado pra adicionar material gasto,
         AGRUPADO POR TIPO (Flooring, Adhesive, Molding…) e mostrando quanto
         cada embalagem cobre (ex.: 23 SF / BOX)."""
-        from PySide6.QtGui import QStandardItem
+        from PySide6.QtGui import QFont
         combo = self.ui.cmb_material_product
         combo.clear()
         combo.addItem("— Select a product —", None)
@@ -929,12 +929,16 @@ class JobsMixin:
         for product_id, name, unit, price, ptype, brand, cov, cov_unit in rows:
             if ptype != current_type:
                 current_type = ptype
-                header = QStandardItem(f"── {ptype.upper()} ──")
-                header.setFlags(Qt.ItemFlag.NoItemFlags)  # só título, não dá pra escolher
-                font = header.font()
-                font.setBold(True)
-                header.setFont(font)
-                model.appendRow(header)
+                # Título do grupo: item do próprio combo, desativado (não dá pra
+                # escolher). Criado pelo combo — um QStandardItem criado no Python
+                # era apagado pelo coletor de lixo e derrubava o app no clear().
+                combo.addItem(f"── {ptype.upper()} ──", None)
+                header = model.item(combo.count() - 1)
+                if header is not None:
+                    header.setFlags(Qt.ItemFlag.NoItemFlags)
+                bold = QFont(combo.font())
+                bold.setBold(True)
+                combo.setItemData(combo.count() - 1, bold, Qt.ItemDataRole.FontRole)
             label = f"   {name}" + (f" ({brand})" if brand else "")
             if cov and float(cov) > 0:
                 label += f"  ·  {float(cov):g} {cov_unit or ''} / {unit or 'unit'}"
