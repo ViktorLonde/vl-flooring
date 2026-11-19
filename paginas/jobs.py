@@ -905,25 +905,92 @@ class JobsMixin:
             self._refresh_photos_button()
 
     def _refresh_material_product_combo(self):
-        """Popula o combo de produtos usado pra adicionar material gasto."""
-        self.ui.cmb_material_product.clear()
-        self.ui.cmb_material_product.addItem("— Select a product —", None)
+        """Popula o combo de produtos usado pra adicionar material gasto,
+        AGRUPADO POR TIPO (Flooring, Adhesive, Molding…) e mostrando quanto
+        cada embalagem cobre (ex.: 23 SF / BOX)."""
+        from PySide6.QtGui import QStandardItem
+        combo = self.ui.cmb_material_product
+        combo.clear()
+        combo.addItem("— Select a product —", None)
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
-            cursor.execute("SELECT ID, NAME, UNIT, PRICE FROM products ORDER BY NAME")
+            cursor.execute("SELECT ID, NAME, UNIT, PRICE, COALESCE(NULLIF(TYPE, ''), 'Others'), BRAND, "
+                           "COVERAGE_QTY, COVERAGE_UNIT FROM products ORDER BY 5, NAME")
             rows = cursor.fetchall()
             cursor.close()
             conn.close()
         except (MySQLError, RuntimeError):
             rows = []
         self._products_cache = {}
-        for product_id, name, unit, price in rows:
-            self.ui.cmb_material_product.addItem(name, product_id)
+        self._products_coverage = {}
+        model = combo.model()
+        current_type = None
+        for product_id, name, unit, price, ptype, brand, cov, cov_unit in rows:
+            if ptype != current_type:
+                current_type = ptype
+                header = QStandardItem(f"── {ptype.upper()} ──")
+                header.setFlags(Qt.ItemFlag.NoItemFlags)  # só título, não dá pra escolher
+                font = header.font()
+                font.setBold(True)
+                header.setFont(font)
+                model.appendRow(header)
+            label = f"   {name}" + (f" ({brand})" if brand else "")
+            if cov and float(cov) > 0:
+                label += f"  ·  {float(cov):g} {cov_unit or ''} / {unit or 'unit'}"
+            combo.addItem(label, product_id)
             self._products_cache[product_id] = (name, unit or "", float(price or 0))
+            self._products_coverage[product_id] = (float(cov or 0), (cov_unit or "").upper(), ptype)
+
+    def _update_material_hint(self, *_args):
+        """Mostra, ao lado do Add, o que a quantidade digitada representa
+        (ex.: 41 BOX = 943 SF · $0.00)."""
+        lbl = getattr(self, "_lbl_material_hint", None)
+        if lbl is None:
+            return
+        pid = self.ui.cmb_material_product.currentData()
+        if not pid:
+            lbl.setText("")
+            return
+        _name, unit, price = self._products_cache.get(pid, ("", "", 0.0))
+        cov, cov_unit, _ptype = self._products_coverage.get(pid, (0.0, "", ""))
+        qty = self.ui.dspn_material_qty.value()
+        parts = []
+        if cov > 0:
+            parts.append(f"1 {unit or 'unit'} = {cov:g} {cov_unit}")
+            parts.append(f"{qty:g} {unit} = {qty * cov:,.2f} {cov_unit}".replace(".00 ", " "))
+        parts.append(f"${price:,.2f} / {unit or 'unit'}" if price else "no price yet")
+        lbl.setText("   ·   ".join(parts))
+
+    def _setup_material_hint(self):
+        lbl = QLabel("")
+        lbl.setObjectName("lbl_material_hint")
+        lbl.setStyleSheet("color:#6B7C93; font-size:12px; background:transparent;")
+        self.ui.layout_materials_body.insertWidget(
+            self.ui.layout_materials_body.indexOf(self.ui.btn_remove_material), lbl)
+        self._lbl_material_hint = lbl
+        self.ui.cmb_material_product.currentIndexChanged.connect(self._update_material_hint)
+        self.ui.dspn_material_qty.valueChanged.connect(self._update_material_hint)
+        table = self.ui.table_job_materials
+        table.setColumnCount(6)
+        table.setHorizontalHeaderLabels(["Type", "Product", "Qty", "Unit", "Covers", "Cost"])
+        header = table.horizontalHeader()
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        for col in (0, 2, 3, 4, 5):
+            header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
+
+    def _setup_work_type_decimals(self):
+        """Quantidades dos Work Types com 2 casas (antes era 0: 6,5 virava 6).
+        O banco já guarda DECIMAL(10,2)."""
+        for _prefix, _combo, spin in self._work_type_field_widgets():
+            spin.setDecimals(2)
+            spin.setMaximumWidth(16777215)
+            spin.setMinimumWidth(max(spin.minimumWidth(), 84))
 
     def _load_job_materials(self):
-        """Carrega a lista de materiais gastos no projeto (Job Code) atual."""
+        """Carrega a lista de materiais gastos no projeto (Job Code) atual,
+        ordenada por tipo, com a área que cobre e o custo de cada linha."""
         table = self.ui.table_job_materials
         table.setRowCount(0)
 
@@ -938,17 +1005,17 @@ class JobsMixin:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT jm.ID, COALESCE(p.NAME, '—'), jm.QUANTITY, COALESCE(p.UNIT, ''), jm.UNIT_PRICE
+                SELECT jm.ID, COALESCE(NULLIF(p.TYPE, ''), 'Others'),
+                       CONCAT(COALESCE(p.NAME, '—'), IF(COALESCE(p.BRAND, '') <> '', CONCAT(' (', p.BRAND, ')'), '')),
+                       jm.QUANTITY, COALESCE(p.UNIT, ''), jm.UNIT_PRICE, p.COVERAGE_QTY, COALESCE(p.COVERAGE_UNIT, '')
                 FROM job_materials jm
                 LEFT JOIN products p ON p.ID = jm.PRODUCT_ID
                 WHERE jm.JOB_PROJECT_ID = %s
-                ORDER BY jm.ID
+                ORDER BY 2, 3, jm.ID
                 """,
                 (job_id,),
             )
             rows = cursor.fetchall()
-            cursor.execute("SELECT PROJECT_TYPE FROM job_projects WHERE ID = %s", (job_id,))
-            project_type_row = cursor.fetchone()
             cursor.close()
             conn.close()
         except (MySQLError, RuntimeError) as e:
@@ -957,28 +1024,39 @@ class JobsMixin:
 
         table.setRowCount(len(rows))
         total_cost = 0.0
-        for row_idx, (material_id, name, qty, unit, unit_price) in enumerate(rows):
-            qty = float(qty or 0)
-            total_cost += qty * float(unit_price or 0)
-            item_id = QTableWidgetItem(name)
-            item_id.setData(Qt.ItemDataRole.UserRole, material_id)
-            table.setItem(row_idx, 0, item_id)
-            table.setItem(row_idx, 1, QTableWidgetItem(f"{qty:g}"))
-            table.setItem(row_idx, 2, QTableWidgetItem(unit))
-            for col in range(3):
-                table.item(row_idx, col).setFlags(
-                    table.item(row_idx, col).flags() & ~Qt.ItemFlag.ItemIsEditable
-                )
+        covered = {}
+        previous_type = None
+        for row_idx, (material_id, ptype, name, qty, unit, unit_price, cov, cov_unit) in enumerate(rows):
+            qty, unit_price = float(qty or 0), float(unit_price or 0)
+            line_cost = qty * unit_price
+            total_cost += line_cost
+            cov = float(cov or 0)
+            covers = ""
+            if cov > 0 and cov_unit:
+                area = qty * cov
+                covered[cov_unit] = covered.get(cov_unit, 0) + area if ptype == "Flooring" else covered.get(cov_unit, 0)
+                covers = f"{area:,.2f} {cov_unit}".replace(".00 ", " ")
+            values = [ptype if ptype != previous_type else "", name, f"{qty:g}", unit, covers,
+                      f"${line_cost:,.2f}" if unit_price else "no price"]
+            previous_type = ptype
+            for col, text in enumerate(values):
+                item = QTableWidgetItem(text)
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                if col == 0:
+                    item.setData(Qt.ItemDataRole.UserRole, material_id)
+                    font = item.font()
+                    font.setBold(True)
+                    item.setFont(font)
+                if col == 5 and not unit_price:
+                    item.setForeground(QColor("#B26A00"))
+                table.setItem(row_idx, col, item)
 
-        # O custo total de material só é mostrado em trabalhos do tipo "Particular"
-        # (por enquanto todo Job Code criado é DAY_WORK, então isso fica reservado
-        # pra quando a área de trabalhos particulares existir).
-        project_type = project_type_row[0] if project_type_row else "DAY_WORK"
-        if project_type == "PRIVATE":
-            self.ui.lbl_materials_total_cost.setText(f"Total Material Cost: ${total_cost:,.2f}")
-            self.ui.lbl_materials_total_cost.setVisible(True)
-        else:
-            self.ui.lbl_materials_total_cost.setVisible(False)
+        # Resumo embaixo da tabela: custo total e área de piso coberta
+        summary = f"Total material cost: ${total_cost:,.2f}"
+        if covered.get("SF"):
+            summary += f"   ·   Flooring covers {covered['SF']:,.2f} SF".replace(".00 SF", " SF")
+        self.ui.lbl_materials_total_cost.setText(summary)
+        self.ui.lbl_materials_total_cost.setVisible(bool(rows))
 
     def add_job_material(self):
         """Adiciona um material gasto ao projeto (Job Code) atual."""
