@@ -991,6 +991,7 @@ class JobsMixin:
         row.addWidget(btn_edit, 1)
         row.addWidget(self.ui.btn_remove_material, 1)
         body.insertLayout(idx, row)
+        self._materials_btn_row = row
         self.ui.btn_edit_material = btn_edit
         self.ui.table_job_materials.cellDoubleClicked.connect(lambda *_a: self.edit_job_material())
         self.ui.table_job_materials.setToolTip("Double-click a material to change the quantity or price")

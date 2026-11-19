@@ -660,9 +660,16 @@ class OperationsMixin:
             cur.execute("""
                 SELECT COALESCE(e.JOB_PROJECT_ID, wd.JOB_PROJECT_ID) AS pid, SUM(e.AMOUNT)
                 FROM expenses e LEFT JOIN work_days wd ON wd.ID = e.WORK_DAY_ID
+                WHERE NOT EXISTS (SELECT 1 FROM purchases pu WHERE pu.EXPENSE_ID = e.ID)
                 GROUP BY pid
             """)
             expenses = {pid: float(v or 0) for pid, v in cur.fetchall() if pid}
+            # Compras de fornecedor: o material já conta pelos itens lançados no
+            # job (job_materials); da despesa da compra só o imposto entra aqui.
+            cur.execute("SELECT JOB_PROJECT_ID, SUM(TAX_AMOUNT) FROM purchases "
+                        "WHERE JOB_PROJECT_ID IS NOT NULL GROUP BY JOB_PROJECT_ID")
+            for pid, tax in cur.fetchall():
+                expenses[pid] = expenses.get(pid, 0.0) + float(tax or 0)
             cur.execute("SELECT JOB_PROJECT_ID, SUM(QUANTITY * UNIT_PRICE) FROM job_materials GROUP BY JOB_PROJECT_ID")
             materials = {pid: float(v or 0) for pid, v in cur.fetchall() if pid}
             cur.close()

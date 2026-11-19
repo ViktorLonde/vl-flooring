@@ -39,10 +39,14 @@ from paginas.ferramentas import ToolsMixin
 from paginas.servicos import WorkTypeListMixin
 from paginas.padrao_texto import TextStandardMixin
 from paginas.digitacao import InputHelpersMixin
+from paginas.compras import PurchasesStockMixin
+from paginas.painel import BoardSummaryCleanupMixin
 from PySide6.QtCore import Signal
 
 
 class MainWindow(
+    PurchasesStockMixin,
+    BoardSummaryCleanupMixin,
     InputHelpersMixin,
     TextStandardMixin,
     WorkTypeListMixin,
@@ -124,7 +128,9 @@ class MainWindow(
         self._setup_helper_pay_tab()
         self._setup_products_no_price_filter()
         self._setup_tools()
+        self._setup_board_summary_tools()
         self._setup_material_hint()
+        self._setup_stock_button()
         self._setup_work_type_decimals()
         self._setup_work_type_list()
         self._setup_title_case_fields()

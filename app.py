@@ -19,7 +19,7 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 import registro
 registro.setup_logging()
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from config import load_db_config, check_db_connection
@@ -55,6 +55,7 @@ def start_session():
             main_window.show()
         login.deleteLater()
         main_window.show_attention_summary()
+        QTimer.singleShot(4000, main_window._auto_send_weekly_summary)
 
     def on_signed_out():
         old = main_window

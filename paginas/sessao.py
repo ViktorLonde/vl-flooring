@@ -144,10 +144,13 @@ class SessionMixin:
                           self.open_compliance_manager_dialog))
         if old_pending:
             items.append(("hourglass", "#B26A00", f"{plural(old_pending, 'job')} from past days still PENDING",
-                          self._show_old_pending_jobs))
+                          self.open_data_cleanup_dialog))
         backup_item = self._backup_attention_item()
         if backup_item:
             items.append(backup_item)
+        weekly = self._weekly_summary_attention_item()
+        if weekly:
+            items.append(weekly)
         if incomplete:
             items.append(("clipboard-list", "#1565C0",
                           f"{plural(incomplete, 'job')} from the last 30 days missing information",

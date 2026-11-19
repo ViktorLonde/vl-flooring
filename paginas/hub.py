@@ -65,12 +65,29 @@ _TOOL_CARDS = [
      "btn_tool_calculator", None),
     ("mileage", "car", "Mileage", "Business miles for the tax deduction",
      "btn_tool_mileage", "SELECT COALESCE(ROUND(SUM(MILES)), 0) FROM mileage WHERE YEAR(TRIP_DATE) = YEAR(CURDATE())"),
+    ("purchases", "receipt-2", "Purchases", "Supplier orders — prices, job materials, expense",
+     "btn_tool_purchases", "SELECT COUNT(*) FROM purchases WHERE PURCHASE_DATE >= DATE_FORMAT(CURDATE(), '%Y-%m-01')"),
+    ("stock", "package", "Stock", "Leftover material for the next job",
+     "btn_tool_stock", "SELECT COUNT(*) FROM (SELECT PRODUCT_ID FROM inventory_moves GROUP BY PRODUCT_ID "
+                       "HAVING SUM(QUANTITY) > 0.001) s"),
+    ("board", "layout-dashboard", "Projects Board", "Pending → In Progress → Completed → Invoiced → Paid",
+     "btn_tool_board", "SELECT COUNT(*) FROM job_projects WHERE COALESCE(STATUS, 'ACTIVE') <> 'PAID'"),
+    ("weekly", "calendar", "Weekly Summary", "Days, value, helper pay, invoices, expenses",
+     "btn_tool_weekly_summary", None),
+    ("cleanup", "eraser", "Data Cleanup", "Old open days, fake clients, products without price",
+     "btn_tool_cleanup",
+     "SELECT (SELECT COUNT(*) FROM work_days WHERE (STATUS = 'PENDING' AND WORK_DATE < CURDATE()) OR "
+     "(STATUS IN ('IN_PROGRESS','STARTED') AND WORK_DATE < CURDATE() - INTERVAL 7 DAY)) + "
+     "(SELECT COUNT(*) FROM clients WHERE FULL_NAME LIKE '%— Select%') + "
+     "(SELECT COUNT(*) FROM products WHERE COALESCE(PRICE, 0) = 0)"),
 ]
 _COUNT_LABELS = {
     "companies": "registered", "contractors": "registered", "helpers": "registered",
     "work_types": "registered", "products": "registered", "projects": "job codes",
     "documents": "files", "bank": "unmatched", "job_site": "visits",
     "estimates": "open", "mileage": "miles this year",
+    "purchases": "this month", "stock": "products in stock", "board": "open job codes",
+    "cleanup": "to fix",
 }
 
 
@@ -175,6 +192,9 @@ class RegistrationsHubMixin:
         card = getattr(self, "_hub_cards", {}).get("bank")
         if card is not None:
             card.setVisible(self._role_rule("admin_pages"))
+        card = getattr(self, "_hub_cards", {}).get("weekly")
+        if card is not None:  # valores e helper pay — só quem vê as finanças
+            card.setVisible(self._role_rule("finance"))
 
     def refresh_registrations_hub(self):
         """Atualiza os números dos cartões (chamado ao abrir a página)."""
