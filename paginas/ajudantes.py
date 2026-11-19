@@ -102,6 +102,10 @@ class HelpersMixin:
         txt_phone2.setPlaceholderText("(000) 000 - 0000")
         txt_address = QLineEdit()
         txt_address2 = QLineEdit()
+        # padrão de escrita (Primeira Letra Maiúscula) — paginas/padrao_texto.py
+        from paginas.padrao_texto import attach_title_case
+        for _w in (txt_full_name, txt_company_name, txt_address, txt_address2):
+            attach_title_case(_w)
         cmb_state = QComboBox()
         cmb_city = QComboBox()
         txt_zip = QLineEdit()
@@ -280,6 +284,9 @@ class HelpersMixin:
         table.itemSelectionChanged.connect(load_selected_into_form)
 
         def save_helper():
+            from formatar_texto import smart_title
+            for _w in (txt_full_name, txt_company_name, txt_address, txt_address2):
+                _w.setText(smart_title(_w.text()))
             full_name = txt_full_name.text().strip()
             if not full_name:
                 QMessageBox.warning(dialog, "Required field", "Full Name is required.")

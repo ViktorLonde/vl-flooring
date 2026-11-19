@@ -375,6 +375,11 @@ class ModernMixin:
         return [w for w in page.findChildren(cls) if w.isVisible() and w.isEnabled()]
 
     def _click_page_button(self, prefixes):
+        # tira o foco do campo atual antes: dispara o "saiu do campo" (padrão
+        # de escrita, máscaras) também quando o Save vem pelo Ctrl+S
+        focused = QApplication.focusWidget()
+        if isinstance(focused, QLineEdit):
+            focused.editingFinished.emit()
         for btn in self._page_widgets(QPushButton):
             if btn.objectName().startswith(prefixes):
                 btn.click()

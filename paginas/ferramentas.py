@@ -765,6 +765,9 @@ class ToolsMixin:
                 if not txt_phone.text():
                     txt_phone.setText(c["PHONE_NUMBER"] or "")
         cmb_client.currentIndexChanged.connect(fill_client)
+        from paginas.padrao_texto import attach_title_case
+        for _w in (cmb_client.lineEdit(), txt_address, txt_city):
+            attach_title_case(_w)
 
         table = QTableWidget(0, 7)
         table.setHorizontalHeaderLabels(["Type", "Description", "Qty", "Unit", "Unit price", "Total", ""])

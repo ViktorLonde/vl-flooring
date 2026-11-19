@@ -37,10 +37,12 @@ from paginas.equipe import CrewMixin
 from paginas.hub import RegistrationsHubMixin
 from paginas.ferramentas import ToolsMixin
 from paginas.servicos import WorkTypeListMixin
+from paginas.padrao_texto import TextStandardMixin
 from PySide6.QtCore import Signal
 
 
 class MainWindow(
+    TextStandardMixin,
     WorkTypeListMixin,
     ToolsMixin,
     RegistrationsHubMixin,
@@ -123,6 +125,7 @@ class MainWindow(
         self._setup_material_hint()
         self._setup_work_type_decimals()
         self._setup_work_type_list()
+        self._setup_title_case_fields()
         self._refresh_material_product_combo()
         self._setup_registrations_hub()
         self._setup_icon_theme()
