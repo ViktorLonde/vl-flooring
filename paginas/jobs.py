@@ -979,6 +979,21 @@ class JobsMixin:
         self._lbl_material_hint = lbl
         self.ui.cmb_material_product.currentIndexChanged.connect(self._update_material_hint)
         self.ui.dspn_material_qty.valueChanged.connect(self._update_material_hint)
+        # Edit Selected ao lado do Remove Selected + dois cliques na linha
+        body = self.ui.layout_materials_body
+        idx = body.indexOf(self.ui.btn_remove_material)
+        body.removeWidget(self.ui.btn_remove_material)
+        row = QHBoxLayout()
+        btn_edit = QPushButton("Edit Selected")
+        btn_edit.setObjectName("btn_edit_material")
+        btn_edit.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_edit.clicked.connect(lambda: self.edit_job_material())
+        row.addWidget(btn_edit, 1)
+        row.addWidget(self.ui.btn_remove_material, 1)
+        body.insertLayout(idx, row)
+        self.ui.btn_edit_material = btn_edit
+        self.ui.table_job_materials.cellDoubleClicked.connect(lambda *_a: self.edit_job_material())
+        self.ui.table_job_materials.setToolTip("Double-click a material to change the quantity or price")
         table = self.ui.table_job_materials
         table.setColumnCount(6)
         table.setHorizontalHeaderLabels(["Type", "Product", "Qty", "Unit", "Covers", "Cost"])
@@ -1085,16 +1100,43 @@ class JobsMixin:
             QMessageBox.warning(self, "Invalid quantity", "Enter a quantity greater than zero.")
             return
 
-        _, _, unit_price = self._products_cache.get(product_id, ("", "", 0.0))
+        name, unit, unit_price = self._products_cache.get(product_id, ("", "", 0.0))
 
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO job_materials (JOB_PROJECT_ID, PRODUCT_ID, QUANTITY, UNIT_PRICE) "
-                "VALUES (%s, %s, %s, %s)",
-                (job_id, product_id, qty, unit_price),
-            )
+            # Produto que já está neste job: pergunta se soma na linha existente
+            # (antes virava uma segunda linha do mesmo produto)
+            cursor.execute("SELECT ID, QUANTITY FROM job_materials WHERE JOB_PROJECT_ID=%s AND PRODUCT_ID=%s "
+                           "ORDER BY ID LIMIT 1", (job_id, product_id))
+            existing = cursor.fetchone()
+            merge = False
+            if existing:
+                box = QMessageBox(self)
+                box.setIcon(QMessageBox.Icon.Question)
+                box.setWindowTitle("Already in this job")
+                current = float(existing[1] or 0)
+                box.setText(f"{name} is already in {typed}: {current:g} {unit}.")
+                box.setInformativeText(f"Add {qty:g} to it (total {current + qty:g} {unit})?")
+                btn_merge = box.addButton(f"Add to it ({current + qty:g})", QMessageBox.ButtonRole.AcceptRole)
+                btn_separate = box.addButton("Separate line", QMessageBox.ButtonRole.ActionRole)
+                box.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
+                box.setDefaultButton(btn_merge)
+                box.exec()
+                if box.clickedButton() is btn_merge:
+                    merge = True
+                elif box.clickedButton() is not btn_separate:
+                    cursor.close()
+                    conn.close()
+                    return
+            if merge:
+                cursor.execute("UPDATE job_materials SET QUANTITY = QUANTITY + %s WHERE ID = %s", (qty, existing[0]))
+            else:
+                cursor.execute(
+                    "INSERT INTO job_materials (JOB_PROJECT_ID, PRODUCT_ID, QUANTITY, UNIT_PRICE) "
+                    "VALUES (%s, %s, %s, %s)",
+                    (job_id, product_id, qty, unit_price),
+                )
             conn.commit()
             cursor.close()
             conn.close()
@@ -1105,6 +1147,100 @@ class JobsMixin:
         self.ui.cmb_material_product.setCurrentIndex(0)
         self.ui.dspn_material_qty.setValue(1)
         self._load_job_materials()
+
+    def edit_job_material(self, material_id=None, parent=None):
+        """Edita quantidade e preço de um material já lançado (dois cliques
+        na linha ou botão Edit Selected). Retorna True se salvou."""
+        if material_id is None:
+            table = self.ui.table_job_materials
+            row = table.currentRow()
+            if row < 0 or table.item(row, 0) is None:
+                QMessageBox.information(self, "No selection", "Select a material from the list first.")
+                return False
+            material_id = table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT jm.QUANTITY, jm.UNIT_PRICE, COALESCE(p.NAME, '—'), COALESCE(p.UNIT, ''), "
+                           "COALESCE(p.PRICE, 0) FROM job_materials jm LEFT JOIN products p ON p.ID = jm.PRODUCT_ID "
+                           "WHERE jm.ID = %s", (material_id,))
+            row = cursor.fetchone()
+            cursor.close()
+            conn.close()
+        except (MySQLError, RuntimeError) as e:
+            QMessageBox.critical(self, "Database Error", f"Could not load the material:\n{e}")
+            return False
+        if not row:
+            return False
+        qty, price, name, unit, product_price = float(row[0] or 0), float(row[1] or 0), row[2], row[3], float(row[4] or 0)
+
+        dialog = QDialog(parent or self)
+        dialog.setWindowTitle("Edit material")
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel(f"<b>{name}</b>"))
+        grid = QGridLayout()
+        spin_qty = QDoubleSpinBox()
+        spin_qty.setRange(0, 1_000_000)
+        spin_qty.setDecimals(2)
+        spin_qty.setGroupSeparatorShown(True)
+        spin_qty.setSuffix(f" {unit}" if unit else "")
+        spin_qty.setValue(qty)
+        spin_price = QDoubleSpinBox()
+        spin_price.setRange(0, 1_000_000)
+        spin_price.setDecimals(2)
+        spin_price.setPrefix("$ ")
+        spin_price.setGroupSeparatorShown(True)
+        spin_price.setValue(price)
+        lbl_total = QLabel()
+        grid.addWidget(QLabel("Quantity"), 0, 0)
+        grid.addWidget(spin_qty, 0, 1)
+        grid.addWidget(QLabel(f"Unit price (per {unit or 'unit'})"), 1, 0)
+        grid.addWidget(spin_price, 1, 1)
+        grid.addWidget(QLabel("Total"), 2, 0)
+        grid.addWidget(lbl_total, 2, 1)
+        layout.addLayout(grid)
+        if product_price and product_price != price:
+            btn_use = QPushButton(f"Use current price from Products (${product_price:,.2f})")
+            btn_use.clicked.connect(lambda: spin_price.setValue(product_price))
+            layout.addWidget(btn_use)
+
+        def update_total(*_a):
+            lbl_total.setText(f"<b>${spin_qty.value() * spin_price.value():,.2f}</b>")
+        spin_qty.valueChanged.connect(update_total)
+        spin_price.valueChanged.connect(update_total)
+        update_total()
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        btn_cancel, btn_save = QPushButton("Cancel"), QPushButton("Save")
+        btn_save.setObjectName("btn_save_material_edit")
+        buttons.addWidget(btn_cancel)
+        buttons.addWidget(btn_save)
+        layout.addLayout(buttons)
+        btn_cancel.clicked.connect(dialog.reject)
+        saved = {"ok": False}
+
+        def save():
+            if spin_qty.value() <= 0:
+                QMessageBox.warning(dialog, "Quantity", "Enter a quantity greater than zero (or use Remove).")
+                return
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute("UPDATE job_materials SET QUANTITY=%s, UNIT_PRICE=%s WHERE ID=%s",
+                               (spin_qty.value(), spin_price.value(), material_id))
+                conn.commit()
+                cursor.close()
+                conn.close()
+            except (MySQLError, RuntimeError) as e:
+                QMessageBox.critical(dialog, "Database Error", f"Could not save the material:\n{e}")
+                return
+            saved["ok"] = True
+            dialog.accept()
+        btn_save.clicked.connect(save)
+        dialog.exec()
+        if saved["ok"]:
+            self._load_job_materials()
+        return saved["ok"]
 
     def remove_job_material(self):
         """Remove o material selecionado na lista."""

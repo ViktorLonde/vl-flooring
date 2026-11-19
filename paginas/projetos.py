@@ -635,7 +635,7 @@ class ProjectsMixin:
             cursor.execute(
                 """
                 SELECT CONCAT(COALESCE(p.NAME, '—'), IF(COALESCE(p.BRAND, '') <> '', CONCAT(' (', p.BRAND, ')'), '')),
-                       jm.QUANTITY, COALESCE(p.UNIT, ''), jm.UNIT_PRICE
+                       jm.QUANTITY, COALESCE(p.UNIT, ''), jm.UNIT_PRICE, jm.ID
                 FROM job_materials jm
                 LEFT JOIN products p ON p.ID = jm.PRODUCT_ID
                 WHERE jm.JOB_PROJECT_ID = %s
@@ -735,7 +735,7 @@ class ProjectsMixin:
         table_materials.setRowCount(len(material_rows))
         material_cost_total = 0.0
         unpriced = 0
-        for r, (pname, qty, unit, unit_price) in enumerate(material_rows):
+        for r, (pname, qty, unit, unit_price, material_id) in enumerate(material_rows):
             qty, unit_price = float(qty or 0), float(unit_price or 0)
             line_total = qty * unit_price
             material_cost_total += line_total
@@ -746,9 +746,20 @@ class ProjectsMixin:
                 item = QTableWidgetItem(text)
                 if c == 0:
                     item.setToolTip(pname)
+                    item.setData(Qt.ItemDataRole.UserRole, material_id)
                 table_materials.setItem(r, c, item)
         fit_rows(table_materials, 8)
         layout.addWidget(table_materials)
+
+        def edit_material(row, _col):
+            # edita e reabre a janela com os valores atualizados
+            material_id = table_materials.item(row, 0).data(Qt.ItemDataRole.UserRole)
+            if self.edit_job_material(material_id, parent=dialog):
+                dialog.accept()
+                self.open_project_view_dialog(job_code)
+
+        table_materials.cellDoubleClicked.connect(edit_material)
+        table_materials.setToolTip("Double-click a material to change the quantity or price")
         material_note = f"<b>Total Material Cost:</b> ${material_cost_total:,.2f}"
         if unpriced:
             material_note += (f" &nbsp;<span style='color:#B26A00;'>({unpriced} item(s) without price — "

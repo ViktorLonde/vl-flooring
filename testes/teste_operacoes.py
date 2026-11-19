@@ -150,6 +150,32 @@ try:
         w._fill_unpriced_job_materials(prod, 42.5)
         prices = {float(p[0]) for p in q("SELECT UNIT_PRICE FROM job_materials WHERE PRODUCT_ID=%s", (prod,))}
         check("unpriced materials get the new price", prices == {42.5}, prices)
+
+    # ── materiais: produto repetido soma; edição de quantidade/preço ──
+    w._go_to_page(1, w.ui.btn_jobs)
+    w._open_job_by_id(code_ids[0], None); a.processEvents(); w._job_form_dirty = False
+    prod = q("SELECT ID FROM products WHERE ID NOT IN (SELECT PRODUCT_ID FROM job_materials WHERE JOB_PROJECT_ID=%s) "
+             "ORDER BY ID LIMIT 1", (code_pid,))[0][0]
+    combo = w.ui.cmb_material_product
+    combo.setCurrentIndex(combo.findData(prod)); w.ui.dspn_material_qty.setValue(5)
+    w.add_job_material(); a.processEvents()
+    combo.setCurrentIndex(combo.findData(prod)); w.ui.dspn_material_qty.setValue(3)
+
+    def merge(d):
+        next(b for b in d.findChildren(QPushButton) if b.text().startswith("Add to it")).click()
+    dialog_actions.append(merge)
+    w.add_job_material(); a.processEvents()
+    lines = q("SELECT ID, QUANTITY FROM job_materials WHERE JOB_PROJECT_ID=%s AND PRODUCT_ID=%s", (code_pid, prod))
+    check("same product is added to the existing line", len(lines) == 1 and float(lines[0][1]) == 8, lines)
+
+    def edit(d):
+        from PySide6.QtWidgets import QDoubleSpinBox as _S
+        spins = d.findChildren(_S); spins[0].setValue(6.5); spins[1].setValue(12.25)
+        next(b for b in d.findChildren(QPushButton) if b.objectName() == "btn_save_material_edit").click()
+    dialog_actions.append(edit)
+    w.edit_job_material(lines[0][0]); a.processEvents()
+    after = q("SELECT QUANTITY, UNIT_PRICE FROM job_materials WHERE ID=%s", (lines[0][0],))[0]
+    check("material quantity and price can be edited", float(after[0]) == 6.5 and float(after[1]) == 12.25, after)
 except Exception:
     traceback.print_exc(); ok = False
 finally:
