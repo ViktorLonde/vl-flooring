@@ -112,6 +112,7 @@ class MainWindow(
         self._setup_client_drawer_animation()
         self._setup_client_drawer_scrollable()
         self._setup_pages_size_isolation()
+        self._setup_combo_width_limits()
         self._set_collapsed_instant()
         self._connect_signals()
         self._setup_autocomplete_combos()
@@ -399,7 +400,7 @@ class MainWindow(
                 self.ui.frame_jobs_left_panel.setVisible(False)
 
         start = self.ui.frame_client_drawer.width()
-        end = 0 if self._client_drawer_expanded else CLIENT_DRAWER_WIDTH
+        end = 0 if self._client_drawer_expanded else self._client_drawer_target_width()
 
         self._client_drawer_anim_min.stop()
         self._client_drawer_anim_max.stop()
@@ -414,6 +415,68 @@ class MainWindow(
         self.ui.btn_toggle_client_drawer.setText(
             "👤  Client Info  ✕" if self._client_drawer_expanded else "👤  Client Info"
         )
+
+    def _client_drawer_target_width(self):
+        """Largura da gaveta que cabe na tela: até CLIENT_DRAWER_WIDTH, mas
+        nunca empurrando a janela além da largura disponível (mínimo 440)."""
+        screen_w = self.screen().availableGeometry().width()
+        drawer = self.ui.frame_client_drawer
+        others = self.minimumSizeHint().width() - max(drawer.minimumWidth(), 0)
+        if self._drawer_hid_left_panel:  # a tabela acabou de ser escondida — não conta
+            others -= self.ui.frame_jobs_left_panel.minimumSizeHint().width() + 16
+        if self._sidebar_expanded:
+            others -= SIDEBAR_EXPANDED - SIDEBAR_COLLAPSED
+        free = screen_w - others - 8
+        return max(470, min(CLIENT_DRAWER_WIDTH, free))
+
+    def _setup_combo_width_limits(self):
+        """Combos com textos longos vindos do banco (produtos, empresas…)
+        alargavam a página inteira (o Qt dimensiona o combo pelo maior item)
+        — era isso que empurrava a tela pra fora com a gaveta de Client Info
+        aberta. Quando o maior item passa de ~240px, o combo passa a
+        dimensionar por 20 caracteres; a lista aberta continua mostrando o
+        nome inteiro (o Qt alarga o popup sozinho)."""
+        def limit(combo):
+            import shiboken6
+            if not shiboken6.isValid(combo):
+                return
+            if combo.sizeAdjustPolicy() == QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon:
+                return
+            fm = combo.fontMetrics()
+            longest = max((fm.horizontalAdvance(combo.itemText(i)) for i in range(combo.count())), default=0)
+            if longest > 240:
+                combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+                combo.setMinimumContentsLength(20)
+                combo.updateGeometry()
+
+        for combo in self.findChildren(QComboBox):
+            model = combo.model()
+            model.rowsInserted.connect(lambda *_a, c=combo: limit(c))
+            model.modelReset.connect(lambda *_a, c=combo: limit(c))
+            limit(combo)
+        # O título "Work Day Record" pode sumir quando falta espaço no cabeçalho
+        title = getattr(self.ui, "lbl_form_title", None)
+        if title is not None:
+            title.setMinimumWidth(1)  # prefere o tamanho do texto, mas pode encolher
+        # Título "Materials Used" vinha branco fixo (de quando o cabeçalho era
+        # escuro) e sumia no cabeçalho claro — usa o mesmo estilo do título
+        # "Client Info" (que já funciona no claro e no dark mode).
+        mat_title = getattr(self.ui, "lbl_materials_title", None)
+        ref_title = getattr(self.ui, "lbl_client_info_title", None)
+        if mat_title is not None and ref_title is not None:
+            mat_title.setStyleSheet(ref_title.styleSheet())
+        # Larguras mínimas do .ui no Job Info somavam ~750px — com a gaveta
+        # aberta o card ficava mais largo que o espaço (Payment cortado).
+        # Os campos continuam crescendo quando há espaço; só o mínimo cai.
+        for name, min_w in (("cmb_contractor", 140), ("cmb_company_form", 140), ("cmb_status_form", 115),
+                            ("dspn_value", 110), ("date_work_date", 120), ("cmb_job_code", 130),
+                            ("cmb_payment", 120)):
+            field = getattr(self.ui, name, None)
+            if field is not None:
+                field.setMinimumWidth(min_w)
+        scroll = getattr(self.ui, "scroll_client_drawer", None)
+        if scroll is not None:
+            scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
     def _setup_client_drawer_scrollable(self):
         """NÃO cria nada novo — o próprio .ui (main_window_vl_flooring_6.ui)
