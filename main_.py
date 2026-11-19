@@ -38,10 +38,12 @@ from paginas.hub import RegistrationsHubMixin
 from paginas.ferramentas import ToolsMixin
 from paginas.servicos import WorkTypeListMixin
 from paginas.padrao_texto import TextStandardMixin
+from paginas.digitacao import InputHelpersMixin
 from PySide6.QtCore import Signal
 
 
 class MainWindow(
+    InputHelpersMixin,
     TextStandardMixin,
     WorkTypeListMixin,
     ToolsMixin,
@@ -126,6 +128,7 @@ class MainWindow(
         self._setup_work_type_decimals()
         self._setup_work_type_list()
         self._setup_title_case_fields()
+        self._setup_zip_suggestions()
         self._refresh_material_product_combo()
         self._setup_registrations_hub()
         self._setup_icon_theme()

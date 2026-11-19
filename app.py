@@ -107,6 +107,8 @@ def main():
     install_icon_theme(app)
     from paginas.moderno import install_modern_ui
     install_modern_ui(app)
+    from paginas.digitacao import install_select_all_on_focus
+    install_select_all_on_focus(app)
 
     if not wait_for_database():
         sys.exit(1)
