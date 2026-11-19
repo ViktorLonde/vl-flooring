@@ -397,10 +397,15 @@ class OperationsMixin:
                         values["VALUE"] = 0
                     cur.execute(f"INSERT INTO work_days ({', '.join(cols)}) VALUES ({', '.join(['%s'] * len(cols))})",
                                 [values[c] for c in cols])
+                    new_day_id = cur.lastrowid  # guarda antes dos INSERTs abaixo mudarem o lastrowid
+                    if self._work_type_list_ready():  # e a mesma lista de Work Types
+                        cur.execute("INSERT INTO work_day_work_types (WORK_DAY_ID, CATEGORY, WORK_TYPE_ID, QTY, SORT_ORDER) "
+                                    "SELECT %s, CATEGORY, WORK_TYPE_ID, QTY, SORT_ORDER FROM work_day_work_types "
+                                    "WHERE WORK_DAY_ID=%s", (new_day_id, job_id))
                     if self._crew_table_ready():  # a cópia leva a mesma equipe
                         cur.execute("INSERT INTO work_day_helpers (WORK_DAY_ID, HELPER_ID, PAY) "
                                     "SELECT %s, HELPER_ID, PAY FROM work_day_helpers WHERE WORK_DAY_ID=%s",
-                                    (cur.lastrowid, job_id))
+                                    (new_day_id, job_id))
                     created += 1
                 conn.commit()
                 cur.close()
@@ -460,10 +465,20 @@ class OperationsMixin:
         rows = cur.fetchall()
         cur.close()
         conn.close()
+        lists = {}
+        try:
+            conn2 = self._get_connection()
+            cur2 = conn2.cursor()
+            lists = self._work_types_by_day(cur2, [r["ID"] for r in rows])
+            cur2.close()
+            conn2.close()
+        except (MySQLError, RuntimeError):
+            lists = {}
         for r in rows:
             names = []
-            for prefix in _WT_PREFIXES:
-                wid = r.get(f"{prefix}_ID")
+            ids = [wid for _c, wid, _q in lists.get(r["ID"], [])] or \
+                  [r.get(f"{prefix}_ID") for prefix in _WT_PREFIXES]
+            for wid in ids:
                 if wid and wt_names.get(wid) and wt_names[wid] not in names:
                     names.append(wt_names[wid])
             r["WORK_TYPES"] = ", ".join(names)

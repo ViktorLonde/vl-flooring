@@ -827,6 +827,7 @@ class JobsMixin:
             self._set_combo_by_data(self.ui.cmb_helper, helper_id)
         # mesma equipe do último dia desse Job Code (dá pra mudar no botão Helpers)
         self._load_crew_from_latest_day(job_id)
+        self._load_work_types_from_latest_day(job_id)
         if state_id:
             self._set_combo_by_data(self.ui.cmb_client_state, state_id)
             self._reload_city_combo_for_state(self.ui.cmb_client_city, state_id, keep_city_id=city_id)
@@ -1145,6 +1146,7 @@ class JobsMixin:
         self.ui.cmb_contractor.setCurrentIndex(0)
         self.ui.cmb_helper.setCurrentIndex(0)
         self._reset_job_helpers()
+        self._set_work_type_list([])
         self.ui.cmb_company_form.setCurrentIndex(0)
         self.ui.cmb_client_city.setCurrentIndex(0)
         self.ui.cmb_client_state.setCurrentIndex(0)
@@ -1267,6 +1269,7 @@ class JobsMixin:
         self._set_combo_by_data(self.ui.cmb_contractor, data.get("CONTRACTOR_ID"))
         self._set_combo_by_data(self.ui.cmb_helper, data.get("HELPER_ID"))
         self._load_job_helpers(data.get("ID"), data)
+        self._load_work_type_list(data.get("ID"), data)
         self._set_combo_by_data(self.ui.cmb_company_form, data.get("COMPANY_ID"))
         self._set_combo_by_data(self.ui.cmb_client_state, data.get("STATE_ID"))
         self._reload_city_combo_for_state(self.ui.cmb_client_city, data.get("STATE_ID"), keep_city_id=data.get("CITY_ID"))
@@ -1484,10 +1487,11 @@ class JobsMixin:
             ("REPARO_1", self.ui.cmb_reparo, self.ui.dspn_reparo),
             ("REPARO_2", self.ui.cmb_reparo_2, self.ui.dspn_reparo_2),
         ]
-        for prefix, combo, spin in work_type_fields:
-            type_id = combo.currentData()
-            data[f"{prefix}_ID"] = type_id
-            data[f"{prefix}_QTY"] = spin.value() if type_id else None
+        # A lista de Work Types (sem limite de linhas, paginas/servicos.py)
+        # preenche as colunas antigas com os primeiros serviços de cada
+        # categoria; a lista completa vai para work_day_work_types logo abaixo.
+        from paginas.servicos import fixed_column_values
+        data.update(fixed_column_values(self._get_work_type_list()))
 
         try:
             conn = self._get_connection()
@@ -1539,6 +1543,7 @@ class JobsMixin:
                 cursor.execute(query, list(data.values()))
             saved_job_id = self._current_job_id or cursor.lastrowid
             self._save_job_helpers(cursor, saved_job_id)
+            self._save_work_type_list(cursor, saved_job_id)
 
             other_days_updated = 0
             if shared_changes:

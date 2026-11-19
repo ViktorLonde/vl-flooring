@@ -67,6 +67,13 @@ class HomeMixin:
             union_query = " UNION ALL ".join(
                 f"SELECT {col} AS WT_ID FROM work_days WHERE {col} IS NOT NULL" for col in wt_columns
             )
+            # Lista completa (sem limite de linhas) quando a tabela existe;
+            # dias antigos sem lista continuam contando pelas colunas.
+            if self._table_column_exists("work_day_work_types", "WORK_DAY_ID"):
+                union_query = (
+                    "SELECT WORK_TYPE_ID AS WT_ID FROM work_day_work_types UNION ALL " + " UNION ALL ".join(
+                        f"SELECT wd.{col} AS WT_ID FROM work_days wd WHERE wd.{col} IS NOT NULL AND NOT EXISTS "
+                        f"(SELECT 1 FROM work_day_work_types x WHERE x.WORK_DAY_ID = wd.ID)" for col in wt_columns))
             cursor.execute(
                 f"""
                 SELECT wt.NAME, COUNT(*) AS cnt

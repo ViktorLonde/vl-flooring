@@ -42,6 +42,19 @@ class InvoicePdfMixin:
                 lines.append(f"{label}: {name}")
         return lines
 
+    def _describe_work_type_list(self, items, wt_lookup, show_qty):
+        """Mesmo formato de _describe_job_work_types, a partir da lista
+        completa [(categoria, work_type_id, qty)]."""
+        lines = []
+        for category, wt_id, qty in items:
+            name, unit = wt_lookup.get(wt_id, (f"Work Type #{wt_id}", ""))
+            label = WORK_TYPE_CATEGORY_LABELS.get(category, category)
+            if show_qty and qty is not None:
+                lines.append(f"{label}: {name} ({float(qty):g} {unit})".strip())
+            else:
+                lines.append(f"{label}: {name}")
+        return lines
+
     def _fetch_invoice_jobs(self, cursor, fk_col, fk_id, d_from, d_to, partner_table, partner_fk_col,
                              partner_name_col, job_ids=None):
         """Busca os jobs de uma entidade (contractor/company/client) no período,
@@ -59,7 +72,8 @@ class InvoicePdfMixin:
                    wd.PREPARATION_1_ID, wd.PREPARATION_1_QTY, wd.PREPARATION_2_ID, wd.PREPARATION_2_QTY,
                    wd.PREPARATION_3_ID, wd.PREPARATION_3_QTY, wd.PREPARATION_4_ID, wd.PREPARATION_4_QTY,
                    wd.OTHERS_1_ID, wd.OTHERS_1_QTY, wd.OTHERS_2_ID, wd.OTHERS_2_QTY,
-                   wd.REPARO_1_ID, wd.REPARO_1_QTY, wd.REPARO_2_ID, wd.REPARO_2_QTY
+                   wd.REPARO_1_ID, wd.REPARO_1_QTY, wd.REPARO_2_ID, wd.REPARO_2_QTY,
+                   wd.ID
             FROM work_days wd
             LEFT JOIN cities city ON city.ID = wd.CITY_ID
             LEFT JOIN {partner_table} partner ON partner.ID = wd.{partner_fk_col}
@@ -74,7 +88,11 @@ class InvoicePdfMixin:
             params.extend(job_ids)
         query += " ORDER BY wd.WORK_DATE, COALESCE(wd.DAY_SEQUENCE, 999999), wd.ID"
         cursor.execute(query, params)
-        return cursor.fetchall()
+        rows = cursor.fetchall()
+        # lista completa de Work Types de cada dia (inclui os que não cabem
+        # nas colunas antigas) — usada por _prepare_invoice_item_rows
+        self._invoice_work_type_lists = self._work_types_by_day(cursor, [r[-1] for r in rows])
+        return rows
 
     def _prepare_invoice_item_rows(self, jobs, wt_lookup, options, cell_style):
         """Monta as linhas prontas pra tabela de itens do PDF (Date | Address |
@@ -87,12 +105,17 @@ class InvoicePdfMixin:
         jobs_total = 0.0
         for row in jobs:
             work_date, address, address2, city, partner, value, day_sequence, *wt_fields = row
+            day_id = wt_fields[32] if len(wt_fields) > 32 else None
+            full_list = getattr(self, "_invoice_work_type_lists", {}).get(day_id)
             value = float(value or 0)
             jobs_total += value
             full_address = address or ""
             if address2:
                 full_address += f", {address2}"
-            desc_lines = self._describe_job_work_types(wt_fields, wt_lookup, show_qty)
+            if full_list:
+                desc_lines = self._describe_work_type_list(full_list, wt_lookup, show_qty)
+            else:
+                desc_lines = self._describe_job_work_types(wt_fields, wt_lookup, show_qty)
             parsed.append({
                 "date": work_date, "address": full_address, "city": city,
                 "value": value, "desc_lines": desc_lines or ["—"],
