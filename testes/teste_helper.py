@@ -83,9 +83,11 @@ try:
     check("job day portion saved", float(q("SELECT DAY_FRACTION FROM work_days WHERE ID=%s", (target,))[0][0]) == 0.333)
     w._open_job_by_id(target, None); a.processEvents(); w._job_form_dirty = False
     w._update_days_worked_label(); a.processEvents()
-    check("days worked label adds the fractions", "⅓" in w.ui.lbl_days_worked_value.text()
-          or q("SELECT COUNT(*) FROM work_days WHERE JOB_PROJECT_ID=(SELECT JOB_PROJECT_ID FROM work_days WHERE ID=%s) "
-               "AND STATUS <> 'CANCELLED'", (target,))[0][0] == 0, w.ui.lbl_days_worked_value.text())
+    from paginas.fracao import fmt_days
+    expected_days = float(q("SELECT SUM(DAY_FRACTION) FROM work_days WHERE STATUS <> 'CANCELLED' AND JOB_PROJECT_ID="
+                            "(SELECT JOB_PROJECT_ID FROM work_days WHERE ID=%s)", (target,))[0][0] or 0)
+    check("days worked label adds the fractions", fmt_days(expected_days) in w.ui.lbl_days_worked_value.text(),
+          (w.ui.lbl_days_worked_value.text(), expected_days))
     summ = q("SELECT HELPER_ID, HELPER_PAY FROM work_days WHERE ID=%s", (target,))[0]
     check("day summary = first helper + total pay", summ[0] == h1 and float(summ[1]) == 270.0, summ)
     check("crew NOT copied to other days of the code",

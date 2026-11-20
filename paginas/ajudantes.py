@@ -172,6 +172,17 @@ class HelpersMixin:
         for offset, (label_text, widget) in enumerate(payment_rows, start=1):
             form_layout.addWidget(QLabel(label_text), payment_section_row + offset, 0)
             form_layout.addWidget(widget, payment_section_row + offset, 1)
+        # Diária: pagamento do dia = diária × parte do dia (⅓, ½…)
+        spn_daily_rate = QDoubleSpinBox()
+        spn_daily_rate.setObjectName("dspn_helper_daily_rate")
+        spn_daily_rate.setDecimals(2)
+        spn_daily_rate.setMaximum(99999.99)
+        spn_daily_rate.setPrefix("$ ")
+        spn_daily_rate.setToolTip("Pay for a FULL day. On a ⅓ day the pay is filled in as ⅓ of this.")
+        rate_row = payment_section_row + len(payment_rows) + 1
+        form_layout.addWidget(QLabel("Daily rate (full day):"), rate_row, 0)
+        form_layout.addWidget(spn_daily_rate, rate_row, 1)
+        has_rate_col = self._table_column_exists("helpers", "DAILY_RATE")
 
         # Formulário agora tem mais campos (com as formas de pagamento) do
         # que cabe numa tela só — envolve num QScrollArea pra dar rolagem
@@ -211,6 +222,7 @@ class HelpersMixin:
                 w.clear()
             for w in payment_fields.values():
                 w.clear()
+            spn_daily_rate.setValue(0)
             cmb_state.setCurrentIndex(0)
             self._reload_city_combo_for_state(cmb_city, None)
             table.clearSelection()
@@ -253,7 +265,7 @@ class HelpersMixin:
             # correspondente já tiver rodado — assim, carregar um Helper
             # continua funcionando mesmo antes de você rodar a migração nova.
             payment_cols = [col for col in payment_fields if self._table_column_exists("helpers", col)]
-            all_cols = base_cols + payment_cols
+            all_cols = base_cols + payment_cols + (["DAILY_RATE"] if has_rate_col else [])
             try:
                 conn = self._get_connection()
                 cursor = conn.cursor()
@@ -280,6 +292,7 @@ class HelpersMixin:
             self._reload_city_combo_for_state(cmb_city, values.get("STATE_ID"), keep_city_id=values.get("CITY_ID"))
             for col, widget in payment_fields.items():
                 widget.setText(values.get(col) or "")
+            spn_daily_rate.setValue(float(values.get("DAILY_RATE") or 0))
 
         table.itemSelectionChanged.connect(load_selected_into_form)
 
@@ -309,6 +322,8 @@ class HelpersMixin:
             for col, widget in payment_fields.items():
                 if self._table_column_exists("helpers", col):
                     data[col] = widget.text().strip()
+            if has_rate_col:
+                data["DAILY_RATE"] = spn_daily_rate.value() or None
             try:
                 conn = self._get_connection()
                 cursor = conn.cursor()

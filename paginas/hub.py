@@ -76,6 +76,8 @@ _TOOL_CARDS = [
      "btn_tool_board", "SELECT COUNT(*) FROM job_projects WHERE COALESCE(STATUS, 'ACTIVE') <> 'PAID'"),
     ("weekly", "calendar", "Weekly Summary", "Days, value, helper pay, invoices, expenses",
      "btn_tool_weekly_summary", None),
+    ("earnings", "cash", "Earnings per Day", "What a full day of work brings in — by month, job, customer",
+     "btn_tool_earnings", None),
     ("accountant", "file-spreadsheet", "Accountant Package", "Year in Excel + receipts + invoices (.zip)",
      "btn_tool_accountant", None),
     ("usage", "chart-bar", "Material Usage", "Installed SF × flooring launched = waste %",
@@ -201,7 +203,7 @@ class RegistrationsHubMixin:
         card = getattr(self, "_hub_cards", {}).get("bank")
         if card is not None:
             card.setVisible(self._role_rule("admin_pages"))
-        for key in ("weekly", "accountant"):  # valores e helper pay — só quem vê as finanças
+        for key in ("weekly", "accountant", "earnings"):  # valores e helper pay — só quem vê as finanças
             card = getattr(self, "_hub_cards", {}).get(key)
             if card is not None:
                 card.setVisible(self._role_rule("finance"))

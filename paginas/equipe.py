@@ -175,6 +175,7 @@ class CrewMixin:
         layout.addWidget(lbl_total)
 
         helpers = self._helper_names()
+        daily_rates = self._helper_daily_rates() if hasattr(self, "_helper_daily_rates") else {}
 
         def update_total():
             total = 0.0
@@ -198,6 +199,19 @@ class CrewMixin:
             spin.setValue(float(pay or 0))
             spin.valueChanged.connect(lambda *_a: update_total())
             portion = make_portion_combo(self._day_portion_value() if fraction is None else fraction)
+            auto = {"pay": None}
+
+            def auto_pay(*_a):
+                # Pay em $0 (ou ainda com o valor que o cálculo pôs) segue a diária × parte do dia
+                rate = daily_rates.get(combo.currentData())
+                if not rate:
+                    return
+                if spin.value() == 0 or (auto["pay"] is not None and abs(spin.value() - auto["pay"]) < 0.005):
+                    auto["pay"] = round(rate * float(portion.currentData() or 1), 2)
+                    spin.setValue(auto["pay"])
+            combo.currentIndexChanged.connect(auto_pay)
+            portion.currentIndexChanged.connect(auto_pay)
+            combo.setToolTip("Helpers with a daily rate get the pay filled in (rate × part of the day)")
             btn_remove = QPushButton()
             btn_remove.setIcon(tabler_icon("x", "#C62828", 16))
             btn_remove.setToolTip("Remove this helper")

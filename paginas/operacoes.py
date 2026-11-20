@@ -681,10 +681,14 @@ class OperationsMixin:
             """, (since,))
             jobs = cur.fetchall()
             cur.execute("""
-                SELECT COALESCE(e.JOB_PROJECT_ID, wd.JOB_PROJECT_ID) AS pid, SUM(e.AMOUNT)
-                FROM expenses e LEFT JOIN work_days wd ON wd.ID = e.WORK_DAY_ID
-                WHERE NOT EXISTS (SELECT 1 FROM purchases pu WHERE pu.EXPENSE_ID = e.ID)
-                GROUP BY pid
+                SELECT t.pid, SUM(t.amount) FROM (
+                    SELECT COALESCE(e.JOB_PROJECT_ID, wd.JOB_PROJECT_ID) AS pid, e.AMOUNT AS amount
+                    FROM expenses e LEFT JOIN work_days wd ON wd.ID = e.WORK_DAY_ID
+                    WHERE NOT EXISTS (SELECT 1 FROM purchases pu WHERE pu.EXPENSE_ID = e.ID)
+                      AND NOT EXISTS (SELECT 1 FROM expense_allocations a WHERE a.EXPENSE_ID = e.ID)
+                    UNION ALL
+                    SELECT a.JOB_PROJECT_ID, a.AMOUNT FROM expense_allocations a
+                ) t GROUP BY t.pid
             """)
             expenses = {pid: float(v or 0) for pid, v in cur.fetchall() if pid}
             # Compras de fornecedor: o material já conta pelos itens lançados no

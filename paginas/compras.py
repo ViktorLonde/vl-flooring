@@ -424,10 +424,12 @@ class PurchasesStockMixin:
             q.setValue(qty)
             p = _money_spin()
             chk = QCheckBox()
+            chk.setStyleSheet("QCheckBox::indicator { width: 18px; height: 18px; border: 2px solid #94A3B8; border-radius: 4px; background-color: #FFFFFF; } QCheckBox::indicator:checked { background-color: #1565C0; border-color: #1565C0; }")
             chk.setChecked(stock_default() if stock is None else stock)
             box = QWidget()
             bl = QHBoxLayout(box)
-            bl.setContentsMargins(18, 0, 0, 0)
+            bl.setContentsMargins(0, 0, 0, 0)
+            bl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             bl.addWidget(chk)
             row = {"product": combo, "qty": q, "price": p, "stock": chk}
             rows.append(row)
