@@ -45,11 +45,13 @@ from paginas.precos import ServiceRatesMixin
 from paginas.fracao import DayPortionMixin
 from paginas.hoje import TodayMixin
 from paginas.rateio import ExpenseSplitMixin
+from paginas.email_teste import EmailTestMixin
 from paginas.contador import AccountantMixin
 from PySide6.QtCore import Signal
 
 
 class MainWindow(
+    EmailTestMixin,
     TodayMixin,
     ExpenseSplitMixin,
     DayPortionMixin,
@@ -150,6 +152,7 @@ class MainWindow(
         self._setup_accountant_tools()
         self._setup_today_card()
         self._setup_expense_split_button()
+        self._setup_email_test_button()
         self._setup_title_case_fields()
         self._setup_zip_suggestions()
         self._refresh_material_product_combo()

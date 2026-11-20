@@ -18,7 +18,10 @@ dump = subprocess.run([os.path.join(BIN, "mysqldump.exe"), f"--defaults-extra-fi
 subprocess.run([os.path.join(BIN, "mysql.exe"), f"--defaults-extra-file={cnf.name}", TEST_DB], input=dump, check=True)
 TEST = {**REAL, "database": TEST_DB}
 fix = mysql.connector.connect(**TEST); fc = fix.cursor()
-fc.execute("UPDATE users SET role='ADMIN', status='Active' WHERE username='viktorlonde'"); fix.commit(); fix.close()
+fc.execute("UPDATE users SET role='ADMIN', status='Active' WHERE username='viktorlonde'")
+# a cópia não usa a conta de e-mail real (o teste confere a detecção de conta não configurada)
+fc.execute("UPDATE app_settings SET SMTP_USER='your-email@gmail.com', SMTP_PASSWORD='your-app-password'")
+fix.commit(); fix.close()
 
 msgs = []
 QMessageBox.information = staticmethod(lambda *a, **k: msgs.append(str(a[2])) or QMessageBox.StandardButton.Ok)

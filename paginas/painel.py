@@ -594,7 +594,8 @@ class BoardSummaryCleanupMixin:
                 self._send_weekly_summary(state["data"], recipient)
             except Exception as e:
                 QApplication.restoreOverrideCursor()
-                QMessageBox.warning(dialog, "E-mail", f"Could not send the summary:\n{e}")
+                QMessageBox.warning(dialog, "E-mail", f"Could not send the summary:\n{e}\n\n"
+                                    "Go to Settings → Email → Send test e-mail to see what is wrong.")
                 return
             QApplication.restoreOverrideCursor()
             show_toast(f"Summary sent to {recipient}.", "success", self)
