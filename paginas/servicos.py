@@ -215,6 +215,8 @@ class WorkTypeListMixin:
             self._wt_summary.setText("  ·  ".join(f"{labels.get(c, c)}: {n}" for c, n in counts.items()))
         else:
             self._wt_summary.setText("")
+        if hasattr(self, "_update_rate_hint"):
+            self._update_rate_hint()
 
     def _get_work_type_list(self):
         """[(categoria, work_type_id, qty)] das linhas com serviço escolhido."""

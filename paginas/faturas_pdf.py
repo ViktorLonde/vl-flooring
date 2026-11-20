@@ -55,6 +55,19 @@ class InvoicePdfMixin:
                 lines.append(f"{label}: {name}")
         return lines
 
+    @staticmethod
+    def _link_invoice_days(cursor, kind, invoice_id, jobs):
+        """Grava quais dias entraram no invoice (o Projects Board usa isso
+        pra mover o Job Code para Invoiced / Paid sozinho)."""
+        day_ids = [r[-1] for r in jobs if r and r[-1]]
+        if not day_ids:
+            return
+        try:
+            cursor.executemany("INSERT IGNORE INTO invoice_work_days (INVOICE_TYPE, INVOICE_ID, WORK_DAY_ID) "
+                               "VALUES (%s, %s, %s)", [(kind, invoice_id, d) for d in day_ids])
+        except MySQLError:
+            logging.getLogger("vl_flooring").exception("could not link invoice %s days", invoice_id)
+
     def _fetch_invoice_jobs(self, cursor, fk_col, fk_id, d_from, d_to, partner_table, partner_fk_col,
                              partner_name_col, job_ids=None):
         """Busca os jobs de uma entidade (contractor/company/client) no período,
@@ -511,6 +524,7 @@ class InvoicePdfMixin:
             (contractor_id, d_from, d_to, jobs_total, expenses_total, jobs_total + expenses_total),
         )
         invoice_id = cursor.lastrowid
+        self._link_invoice_days(cursor, "Contractor", invoice_id, jobs)
 
         # Só mostra a seção de despesas se sobrou pelo menos alguma despesa a
         # incluir (respeita o checkbox "Include Expenses" e a seleção manual).
@@ -570,6 +584,7 @@ class InvoicePdfMixin:
             (company_id, d_from, d_to, jobs_total, jobs_total),
         )
         invoice_id = cursor.lastrowid
+        self._link_invoice_days(cursor, "Company", invoice_id, jobs)
 
         grand_total = self._build_invoice_pdf(
             filepath, invoice_id, "Company", company_name, contact_lines,
@@ -624,6 +639,7 @@ class InvoicePdfMixin:
             (client_id, d_from, d_to, jobs_total, jobs_total),
         )
         invoice_id = cursor.lastrowid
+        self._link_invoice_days(cursor, "Client", invoice_id, jobs)
 
         grand_total = self._build_invoice_pdf(
             filepath, invoice_id, "Client", client_name, contact_lines,

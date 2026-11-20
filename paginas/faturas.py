@@ -1573,6 +1573,11 @@ class InvoicesMixin:
                     (entity_type, invoice_id),
                 )
                 cursor.execute(f"DELETE FROM {table_name} WHERE ID = %s", (invoice_id,))
+                try:
+                    cursor.execute("DELETE FROM invoice_work_days WHERE INVOICE_TYPE = %s AND INVOICE_ID = %s",
+                                   (entity_type, invoice_id))
+                except MySQLError:
+                    pass
                 conn.commit()
                 cursor.close()
                 conn.close()

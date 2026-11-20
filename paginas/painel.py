@@ -124,9 +124,20 @@ class BoardSummaryCleanupMixin:
                    COALESCE(SUM(wd.STATUS = 'CANCELLED'), 0),
                    COALESCE(SUM(CASE WHEN wd.STATUS <> 'CANCELLED' THEN wd.VALUE ELSE 0 END), 0),
                    MIN(wd.WORK_DATE), MAX(wd.WORK_DATE),
-                   SUBSTRING_INDEX(GROUP_CONCAT(wd.ID ORDER BY wd.WORK_DATE DESC, wd.ID DESC), ',', 1)
+                   SUBSTRING_INDEX(GROUP_CONCAT(wd.ID ORDER BY wd.WORK_DATE DESC, wd.ID DESC), ',', 1),
+                   COALESCE(SUM(wd.STATUS <> 'CANCELLED' AND inv.WORK_DAY_ID IS NOT NULL), 0),
+                   COALESCE(SUM(wd.STATUS <> 'CANCELLED' AND inv.PAID = 1), 0)
             FROM job_projects jp
             LEFT JOIN work_days wd ON wd.JOB_PROJECT_ID = jp.ID
+            LEFT JOIN (
+                SELECT x.WORK_DAY_ID, MAX(COALESCE(ci.STATUS, co.STATUS, cl.STATUS) = 'RECEIVED') AS PAID
+                FROM invoice_work_days x
+                LEFT JOIN contractor_invoices ci ON x.INVOICE_TYPE = 'Contractor' AND ci.ID = x.INVOICE_ID
+                LEFT JOIN company_invoices co ON x.INVOICE_TYPE = 'Company' AND co.ID = x.INVOICE_ID
+                LEFT JOIN client_invoices cl ON x.INVOICE_TYPE = 'Client' AND cl.ID = x.INVOICE_ID
+                WHERE COALESCE(ci.ID, co.ID, cl.ID) IS NOT NULL
+                GROUP BY x.WORK_DAY_ID
+            ) inv ON inv.WORK_DAY_ID = wd.ID
             LEFT JOIN clients cl ON cl.ID = wd.CLIENT_ID AND NOT (cl.FULL_NAME LIKE '%%Select%%')
             LEFT JOIN companies co ON co.ID = wd.COMPANY_ID
             LEFT JOIN contractors ct ON ct.ID = wd.CONTRACTOR_ID
@@ -138,13 +149,19 @@ class BoardSummaryCleanupMixin:
         cur.close()
         conn.close()
         out = []
-        for pid, code, status, who, total, pending, completed, cancelled, value, first, last, last_day in rows:
+        for (pid, code, status, who, total, pending, completed, cancelled, value, first, last, last_day,
+             invoiced, paid) in rows:
             status = (status or "ACTIVE").upper()
             active = (total or 0) - (cancelled or 0)
+            invoiced, paid = int(invoiced or 0), int(paid or 0)
             if total and not active:
                 continue  # todos os dias cancelados — fora do quadro
             if status in MANUAL_STAGES:
                 stage = status
+            elif active and paid >= active:
+                stage = "PAID"          # todos os dias em invoices já recebidos
+            elif active and invoiced >= active:
+                stage = "INVOICED"      # todos os dias já entraram em algum invoice
             elif not active or pending == active:
                 stage = "PENDING"
             elif completed == active:
@@ -153,7 +170,8 @@ class BoardSummaryCleanupMixin:
                 stage = "IN_PROGRESS"
             out.append({"id": pid, "code": code, "stage": stage, "who": who or "", "days": active,
                         "value": float(value or 0), "first": first, "last": last,
-                        "last_day_id": int(last_day) if last_day else None, "manual": status in MANUAL_STAGES})
+                        "last_day_id": int(last_day) if last_day else None, "manual": status in MANUAL_STAGES,
+                        "invoiced": invoiced, "paid": paid})
         return out
 
     def _board_stage_of(self, project_id):
@@ -217,8 +235,8 @@ class BoardSummaryCleanupMixin:
             return None
         final = self._board_stage_of(project_id)
         if final != to_stage:
-            show_toast(f"{code} is {_STAGE_LABEL.get(final, final)} — that column comes from the status of its days "
-                       f"(open the job to change a day).", "info", self)
+            show_toast(f"{code} is {_STAGE_LABEL.get(final, final)} — that column comes from its days and invoices "
+                       f"(open the job to change a day, or Receivables to change an invoice).", "info", self)
         else:
             show_toast(f"{code} → {_STAGE_LABEL[to_stage]}", "success", self)
         logging.getLogger("vl_flooring").info("board: %s %s -> %s (%s)", code, from_stage, to_stage, final)
@@ -230,8 +248,8 @@ class BoardSummaryCleanupMixin:
         dialog.resize(1280, 720)
         layout = QVBoxLayout(dialog)
         top = QHBoxLayout()
-        hint = QLabel("Drag a Job Code card to another column. Double-click a card to open the job. "
-                      "Right-click for Move to…")
+        hint = QLabel("Invoiced / Paid move by themselves when every day of the job is in an invoice / the "
+                      "invoice is received. Drag a card to move it by hand; double-click opens the job.")
         hint.setStyleSheet("color:#64748B;")
         search = QLineEdit()
         search.setObjectName("txt_board_search")
@@ -299,6 +317,10 @@ class BoardSummaryCleanupMixin:
                     lines.append(p["who"][:34])
                 lines.append(f"{p['days']} day{'s' if p['days'] != 1 else ''} · {_money(p['value'])}"
                              + (f" · {dates}" if dates else ""))
+                if p.get("invoiced") and p["stage"] not in ("INVOICED", "PAID"):
+                    lines.append(f"Invoiced {p['invoiced']}/{p['days']} days")
+                elif p["stage"] == "INVOICED" and p.get("paid"):
+                    lines.append(f"Paid {p['paid']}/{p['days']} days")
                 item = QListWidgetItem("\n".join(lines))
                 item.setData(Qt.ItemDataRole.UserRole, p["id"])
                 item.setToolTip(f"{p['code']} — {p['who']}\n{p['days']} day(s), {_money(p['value'])}")

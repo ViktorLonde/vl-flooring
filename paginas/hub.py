@@ -45,6 +45,8 @@ _REGISTRATION_CARDS = [
      "btn_reg_work_types", "SELECT COUNT(*) FROM work_types"),
     ("products", "package", "Products", "Materials, prices and coverage",
      "btn_reg_products", "SELECT COUNT(*) FROM products"),
+    ("rates", "cash", "Service Rates", "What you charge per SF / unit — job Value is calculated",
+     "btn_tool_service_rates", "SELECT COUNT(DISTINCT WORK_TYPE_ID) FROM service_rates WHERE RATE > 0"),
 ]
 _TOOL_CARDS = [
     ("projects", "chart-bar", "Projects", "All Job Codes and their status",
@@ -74,6 +76,13 @@ _TOOL_CARDS = [
      "btn_tool_board", "SELECT COUNT(*) FROM job_projects WHERE COALESCE(STATUS, 'ACTIVE') <> 'PAID'"),
     ("weekly", "calendar", "Weekly Summary", "Days, value, helper pay, invoices, expenses",
      "btn_tool_weekly_summary", None),
+    ("accountant", "file-spreadsheet", "Accountant Package", "Year in Excel + receipts + invoices (.zip)",
+     "btn_tool_accountant", None),
+    ("usage", "chart-bar", "Material Usage", "Installed SF × flooring launched = waste %",
+     "btn_tool_material_usage", None),
+    ("calendar", "calendar", "Calendar Export", "Next 8 weeks of jobs for Google Calendar / phone",
+     "btn_tool_calendar", "SELECT COUNT(*) FROM work_days WHERE WORK_DATE BETWEEN CURDATE() AND CURDATE() + INTERVAL 56 DAY "
+                          "AND COALESCE(STATUS, '') <> 'CANCELLED'"),
     ("cleanup", "eraser", "Data Cleanup", "Old open days, fake clients, products without price",
      "btn_tool_cleanup",
      "SELECT (SELECT COUNT(*) FROM work_days WHERE (STATUS = 'PENDING' AND WORK_DATE < CURDATE()) OR "
@@ -87,7 +96,7 @@ _COUNT_LABELS = {
     "documents": "files", "bank": "unmatched", "job_site": "visits",
     "estimates": "open", "mileage": "miles this year",
     "purchases": "this month", "stock": "products in stock", "board": "open job codes",
-    "cleanup": "to fix",
+    "cleanup": "to fix", "rates": "services priced", "calendar": "days scheduled",
 }
 
 
@@ -192,9 +201,10 @@ class RegistrationsHubMixin:
         card = getattr(self, "_hub_cards", {}).get("bank")
         if card is not None:
             card.setVisible(self._role_rule("admin_pages"))
-        card = getattr(self, "_hub_cards", {}).get("weekly")
-        if card is not None:  # valores e helper pay — só quem vê as finanças
-            card.setVisible(self._role_rule("finance"))
+        for key in ("weekly", "accountant"):  # valores e helper pay — só quem vê as finanças
+            card = getattr(self, "_hub_cards", {}).get(key)
+            if card is not None:
+                card.setVisible(self._role_rule("finance"))
 
     def refresh_registrations_hub(self):
         """Atualiza os números dos cartões (chamado ao abrir a página)."""
