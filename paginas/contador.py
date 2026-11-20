@@ -76,12 +76,12 @@ class AccountantMixin:
             GROUP BY MONTH(WORK_DATE)""", (start, end))
         d["produced_by_month"] = {m: (n, float(v)) for m, n, v in cur.fetchall()}
         cur.execute("""
-            SELECT COALESCE(NULLIF(h.FULL_NAME, ''), h.COMPANY_NAME), COUNT(DISTINCT x.WORK_DAY_ID),
+            SELECT COALESCE(NULLIF(h.FULL_NAME, ''), h.COMPANY_NAME), COALESCE(SUM(x.DAY_FRACTION), 0),
                    COALESCE(SUM(x.PAY), 0)
             FROM work_day_helpers x JOIN work_days wd ON wd.ID = x.WORK_DAY_ID JOIN helpers h ON h.ID = x.HELPER_ID
             WHERE wd.WORK_DATE BETWEEN %s AND %s AND COALESCE(wd.STATUS, '') <> 'CANCELLED'
             GROUP BY h.ID ORDER BY 3 DESC""", (start, end))
-        d["helpers"] = [(n, int(c), float(p)) for n, c, p in cur.fetchall()]
+        d["helpers"] = [(n, round(float(c), 2), float(p)) for n, c, p in cur.fetchall()]
         cur.execute("""
             SELECT m.TRIP_DATE, m.MILES, m.PURPOSE, m.FROM_PLACE, m.TO_PLACE, jp.CODE
             FROM mileage m LEFT JOIN job_projects jp ON jp.ID = m.JOB_PROJECT_ID

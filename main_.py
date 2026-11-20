@@ -42,11 +42,13 @@ from paginas.digitacao import InputHelpersMixin
 from paginas.compras import PurchasesStockMixin
 from paginas.painel import BoardSummaryCleanupMixin
 from paginas.precos import ServiceRatesMixin
+from paginas.fracao import DayPortionMixin
 from paginas.contador import AccountantMixin
 from PySide6.QtCore import Signal
 
 
 class MainWindow(
+    DayPortionMixin,
     ServiceRatesMixin,
     AccountantMixin,
     PurchasesStockMixin,
@@ -138,6 +140,7 @@ class MainWindow(
         self._setup_stock_button()
         self._setup_work_type_decimals()
         self._setup_rate_hint()
+        self._setup_day_portion_field()
         self._setup_work_type_list()
         self._setup_rates_tools()
         self._setup_accountant_tools()
@@ -475,7 +478,7 @@ class MainWindow(
         # Larguras mínimas do .ui no Job Info somavam ~750px — com a gaveta
         # aberta o card ficava mais largo que o espaço (Payment cortado).
         # Os campos continuam crescendo quando há espaço; só o mínimo cai.
-        for name, min_w in (("cmb_contractor", 140), ("cmb_company_form", 140), ("cmb_status_form", 115),
+        for name, min_w in (("cmb_contractor", 140), ("cmb_company_form", 140), ("cmb_status_form", 140),
                             ("dspn_value", 110), ("date_work_date", 120), ("cmb_job_code", 130),
                             ("cmb_payment", 120)):
             field = getattr(self.ui, name, None)

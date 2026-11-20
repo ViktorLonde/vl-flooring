@@ -32,6 +32,7 @@ from PySide6.QtWidgets import QListWidget, QListWidgetItem, QMenu, QTabWidget, Q
 from app_common import *  # noqa: F401,F403
 from paginas.visual import tabler_icon
 from paginas.moderno import show_toast
+from paginas.fracao import fmt_days, days_word, portion_label
 
 BOARD_STAGES = [
     ("PENDING", "Pending", "#64748B"),
@@ -123,6 +124,7 @@ class BoardSummaryCleanupMixin:
                    COALESCE(SUM(wd.STATUS = 'COMPLETED'), 0),
                    COALESCE(SUM(wd.STATUS = 'CANCELLED'), 0),
                    COALESCE(SUM(CASE WHEN wd.STATUS <> 'CANCELLED' THEN wd.VALUE ELSE 0 END), 0),
+                   COALESCE(SUM(CASE WHEN wd.STATUS <> 'CANCELLED' THEN wd.DAY_FRACTION ELSE 0 END), 0),
                    MIN(wd.WORK_DATE), MAX(wd.WORK_DATE),
                    SUBSTRING_INDEX(GROUP_CONCAT(wd.ID ORDER BY wd.WORK_DATE DESC, wd.ID DESC), ',', 1),
                    COALESCE(SUM(wd.STATUS <> 'CANCELLED' AND inv.WORK_DAY_ID IS NOT NULL), 0),
@@ -149,7 +151,7 @@ class BoardSummaryCleanupMixin:
         cur.close()
         conn.close()
         out = []
-        for (pid, code, status, who, total, pending, completed, cancelled, value, first, last, last_day,
+        for (pid, code, status, who, total, pending, completed, cancelled, value, day_sum, first, last, last_day,
              invoiced, paid) in rows:
             status = (status or "ACTIVE").upper()
             active = (total or 0) - (cancelled or 0)
@@ -169,6 +171,7 @@ class BoardSummaryCleanupMixin:
             else:
                 stage = "IN_PROGRESS"
             out.append({"id": pid, "code": code, "stage": stage, "who": who or "", "days": active,
+                        "day_sum": float(day_sum or 0),
                         "value": float(value or 0), "first": first, "last": last,
                         "last_day_id": int(last_day) if last_day else None, "manual": status in MANUAL_STAGES,
                         "invoiced": invoiced, "paid": paid})
@@ -315,7 +318,7 @@ class BoardSummaryCleanupMixin:
                 lines = [p["code"]]
                 if p["who"]:
                     lines.append(p["who"][:34])
-                lines.append(f"{p['days']} day{'s' if p['days'] != 1 else ''} · {_money(p['value'])}"
+                lines.append(f"{fmt_days(p['day_sum'])} {days_word(p['day_sum'])} · {_money(p['value'])}"
                              + (f" · {dates}" if dates else ""))
                 if p.get("invoiced") and p["stage"] not in ("INVOICED", "PAID"):
                     lines.append(f"Invoiced {p['invoiced']}/{p['days']} days")
@@ -382,7 +385,7 @@ class BoardSummaryCleanupMixin:
         """, (monday, sunday))
         days = cur.fetchall()
         cur.execute("""
-            SELECT h.FULL_NAME, COUNT(DISTINCT x.WORK_DAY_ID), COALESCE(SUM(x.PAY), 0)
+            SELECT h.FULL_NAME, COALESCE(SUM(x.DAY_FRACTION), 0), COALESCE(SUM(x.PAY), 0)
             FROM work_day_helpers x
             JOIN work_days wd ON wd.ID = x.WORK_DAY_ID
             JOIN helpers h ON h.ID = x.HELPER_ID
@@ -444,7 +447,7 @@ class BoardSummaryCleanupMixin:
         if data["helpers"]:
             parts.append("<table cellspacing='0'>")
             for name, n, pay in data["helpers"]:
-                parts.append(f"<tr><td {td}>{e(name or '')}</td><td {td}>{n} day{'s' if n != 1 else ''}</td>"
+                parts.append(f"<tr><td {td}>{e(name or '')}</td><td {td}>{fmt_days(n)} {days_word(n)}</td>"
                              f"<td {tdr}>{_money(pay)}</td></tr>")
             parts.append("</table>")
         else:
@@ -475,7 +478,7 @@ class BoardSummaryCleanupMixin:
         lines = [f"Weekly summary — {data['monday'].strftime('%b %d')} to {data['sunday'].strftime('%b %d, %Y')}",
                  "", f"Work days: {len(data['days'])}   Job Codes: {len(data['codes'])}",
                  f"Value produced: {_money(data['value'])}", "", "Helper pay:"]
-        lines += [f"  {n}: {d} day(s) — {_money(p)}" for n, d, p in data["helpers"]] or ["  —"]
+        lines += [f"  {n}: {fmt_days(d)} {days_word(d)} — {_money(p)}" for n, d, p in data["helpers"]] or ["  —"]
         lines += ["", "Expenses:"]
         lines += [f"  {str(c).title()}: {_money(a)}" for c, _n, a in data["expenses"]] or ["  —"]
         lines += ["", "Open invoices:"]

@@ -18,6 +18,7 @@ from urllib.parse import quote
 from PySide6.QtWidgets import QCheckBox
 
 from app_common import *  # noqa: F401,F403
+from paginas.fracao import fmt_days
 from paginas.visual import tabler_icon
 from paginas.moderno import show_toast
 
@@ -59,19 +60,41 @@ class OperationsMixin:
         btn.setIcon(tabler_icon("circle-check", "#15803D", 16))
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.setToolTip("Mark the days of this Job Code as COMPLETED at once")
-        btn.setStyleSheet("QPushButton { background-color: #DCFCE7; color: #166534; border: 1px solid #86EFAC; "
-                          "border-radius: 6px; padding: 6px 10px; font-size: 12px; font-weight: 600; } "
-                          "QPushButton:hover { background-color: #BBF7D0; }")
         btn.setVisible(False)
         btn.clicked.connect(self.open_complete_job_dialog)
+        self._style_complete_job_button(btn, False)
         layout = self.ui.layout_job_code_field_row
         layout.insertWidget(layout.indexOf(self.ui.lbl_days_worked_value) + 1, btn)
         self._btn_complete_job = btn
+
+    @staticmethod
+    def _style_complete_job_button(btn, done):
+        """Cinza enquanto o job tem dias abertos; verde (✓ Completed) depois
+        que o job foi concluído."""
+        if done:
+            btn.setText("  Job completed")
+            btn.setIcon(tabler_icon("circle-check", "#FFFFFF", 16))
+            btn.setToolTip("Every day of this Job Code is COMPLETED")
+            btn.setStyleSheet("QPushButton { background-color: #15803D; color: #FFFFFF; border: 1px solid #15803D; "
+                              "border-radius: 6px; padding: 6px 10px; font-size: 12px; font-weight: 700; } "
+                              "QPushButton:hover { background-color: #166534; }")
+        else:
+            btn.setText("  Complete job")
+            btn.setIcon(tabler_icon("circle-check", "#546E7A", 16))
+            btn.setToolTip("Mark the days of this Job Code as COMPLETED at once")
+            btn.setStyleSheet("QPushButton { background-color: #EEF2F7; color: #37474F; border: 1px solid #D0D7DE; "
+                              "border-radius: 6px; padding: 6px 10px; font-size: 12px; font-weight: 600; } "
+                              "QPushButton:hover { background-color: #E1E8F0; }")
+        btn.setProperty("_vl_done", done)
 
     def open_complete_job_dialog(self):
         code = self.ui.cmb_job_code.currentText().strip().upper()
         project_id = self._job_code_to_id.get(code)
         if not project_id:
+            return
+        btn = getattr(self, "_btn_complete_job", None)
+        if btn is not None and btn.property("_vl_done"):
+            QMessageBox.information(self, "Job completed", f"All the days of {code} are already COMPLETED.")
             return
         if getattr(self, "_job_form_dirty", False):
             QMessageBox.information(self, "Save first", "Save the current changes before completing the job.")
@@ -403,8 +426,8 @@ class OperationsMixin:
                                     "SELECT %s, CATEGORY, WORK_TYPE_ID, QTY, SORT_ORDER FROM work_day_work_types "
                                     "WHERE WORK_DAY_ID=%s", (new_day_id, job_id))
                     if self._crew_table_ready():  # a cópia leva a mesma equipe
-                        cur.execute("INSERT INTO work_day_helpers (WORK_DAY_ID, HELPER_ID, PAY) "
-                                    "SELECT %s, HELPER_ID, PAY FROM work_day_helpers WHERE WORK_DAY_ID=%s",
+                        cur.execute("INSERT INTO work_day_helpers (WORK_DAY_ID, HELPER_ID, PAY, DAY_FRACTION) "
+                                    "SELECT %s, HELPER_ID, PAY, DAY_FRACTION FROM work_day_helpers WHERE WORK_DAY_ID=%s",
                                     (new_day_id, job_id))
                     created += 1
                 conn.commit()
@@ -647,7 +670,7 @@ class OperationsMixin:
             cur.execute(f"""
                 SELECT jp.ID, jp.CODE,
                        COALESCE(MAX(cl.FULL_NAME), MAX(co.COMPANY_NAME), MAX(NULLIF(ct.COMPANY_NAME, '')), MAX(ct.FULL_NAME), ''),
-                       COUNT(wd.ID), COALESCE(SUM(wd.VALUE), 0), {helper_pay_sql}
+                       COALESCE(SUM(wd.DAY_FRACTION), COUNT(wd.ID)), COALESCE(SUM(wd.VALUE), 0), {helper_pay_sql}
                 FROM job_projects jp
                 JOIN work_days wd ON wd.JOB_PROJECT_ID = jp.ID AND COALESCE(wd.STATUS, '') <> 'CANCELLED'
                 LEFT JOIN clients cl ON cl.ID = wd.CLIENT_ID
@@ -689,7 +712,8 @@ class OperationsMixin:
             totals[1] += exp + mat + helper_pay
             totals[2] += profit
             margin = (profit / revenue * 100) if revenue else 0.0
-            cells = [(code, None), (who, None), (str(n_days), n_days), (f"${revenue:,.2f}", revenue),
+            n_days = float(n_days or 0)
+            cells = [(code, None), (who, None), (fmt_days(n_days), n_days), (f"${revenue:,.2f}", revenue),
                      (f"${exp:,.2f}", exp), (f"${mat:,.2f}", mat), (f"${helper_pay:,.2f}", helper_pay),
                      (f"${profit:,.2f}", profit), (f"{margin:.0f}%", margin)]
             for c, (text, sort_value) in enumerate(cells):

@@ -17,6 +17,7 @@ Métodos da MainWindow (mixin) — veja main_.py.
 from datetime import timedelta
 
 from app_common import *  # noqa: F401,F403
+from paginas.fracao import fmt_days, make_portion_combo, portion_label
 from paginas.visual import tabler_icon
 from paginas.moderno import show_toast
 
@@ -71,9 +72,9 @@ class CrewMixin:
         if not crew:
             btn.setText("  No helpers — click to add")
             return
-        total = sum(float(p or 0) for _h, p in crew)
+        total = sum(float(c[1] or 0) for c in crew)
         names = dict(self._helper_names())
-        first = ", ".join((names.get(h) or f"#{h}").split()[0] for h, _p in crew[:3])
+        first = ", ".join((names.get(c[0]) or f"#{c[0]}").split()[0] for c in crew[:3])
         more = f" +{len(crew) - 3}" if len(crew) > 3 else ""
         btn.setText(f"  Helpers ({len(crew)}) · ${total:,.2f}   —  {first}{more}")
 
@@ -89,15 +90,15 @@ class CrewMixin:
             try:
                 conn = self._get_connection()
                 cur = conn.cursor()
-                cur.execute("SELECT HELPER_ID, PAY FROM work_day_helpers WHERE WORK_DAY_ID=%s ORDER BY ID",
-                            (work_day_id,))
-                crew = [[h, float(p or 0)] for h, p in cur.fetchall()]
+                cur.execute("SELECT HELPER_ID, PAY, DAY_FRACTION FROM work_day_helpers WHERE WORK_DAY_ID=%s "
+                            "ORDER BY ID", (work_day_id,))
+                crew = [[h, float(p or 0), float(f if f is not None else 1)] for h, p, f in cur.fetchall()]
                 cur.close()
                 conn.close()
             except (MySQLError, RuntimeError):
                 crew = []
         if not crew and data and data.get("HELPER_ID"):
-            crew = [[data["HELPER_ID"], float(data.get("HELPER_PAY") or 0)]]
+            crew = [[data["HELPER_ID"], float(data.get("HELPER_PAY") or 0), 1.0]]
         self._job_helpers = crew
         self._refresh_helpers_button()
 
@@ -109,14 +110,14 @@ class CrewMixin:
             conn = self._get_connection()
             cur = conn.cursor()
             cur.execute("""
-                SELECT h.HELPER_ID, h.PAY FROM work_day_helpers h
+                SELECT h.HELPER_ID, h.PAY, h.DAY_FRACTION FROM work_day_helpers h
                 WHERE h.WORK_DAY_ID = (
                     SELECT wd.ID FROM work_days wd
                     WHERE wd.JOB_PROJECT_ID = %s AND EXISTS (SELECT 1 FROM work_day_helpers x WHERE x.WORK_DAY_ID = wd.ID)
                     ORDER BY wd.WORK_DATE DESC, wd.ID DESC LIMIT 1)
                 ORDER BY h.ID
             """, (job_project_id,))
-            crew = [[h, float(p or 0)] for h, p in cur.fetchall()]
+            crew = [[h, float(p or 0), float(f if f is not None else 1)] for h, p, f in cur.fetchall()]
             cur.close()
             conn.close()
         except (MySQLError, RuntimeError):
@@ -130,17 +131,19 @@ class CrewMixin:
         crew = getattr(self, "_job_helpers", [])
         if not crew:
             return None, None
-        return crew[0][0], round(sum(float(p or 0) for _h, p in crew), 2)
+        return crew[0][0], round(sum(float(c[1] or 0) for c in crew), 2)
 
     def _save_job_helpers(self, cursor, work_day_id):
         """Grava a equipe do dia (na mesma transação do Save do job)."""
         if not work_day_id or not self._crew_table_ready():
             return
         cursor.execute("DELETE FROM work_day_helpers WHERE WORK_DAY_ID=%s", (work_day_id,))
-        for helper_id, pay in getattr(self, "_job_helpers", []):
+        for entry in getattr(self, "_job_helpers", []):
+            helper_id, pay = entry[0], entry[1]
+            fraction = entry[2] if len(entry) > 2 else 1.0
             if helper_id:
-                cursor.execute("INSERT INTO work_day_helpers (WORK_DAY_ID, HELPER_ID, PAY) VALUES (%s, %s, %s)",
-                               (work_day_id, helper_id, pay))
+                cursor.execute("INSERT INTO work_day_helpers (WORK_DAY_ID, HELPER_ID, PAY, DAY_FRACTION) "
+                               "VALUES (%s, %s, %s, %s)", (work_day_id, helper_id, pay, fraction))
 
     # ── janela da equipe ─────────────────────────────────────────────
     def open_job_helpers_dialog(self):
@@ -150,18 +153,19 @@ class CrewMixin:
         read_only = getattr(self, "_db_read_only", False)
         dialog = QDialog(self)
         dialog.setWindowTitle("Helpers of this day")
-        dialog.resize(560, 420)
+        dialog.resize(700, 420)
         layout = QVBoxLayout(dialog)
         date_text = self.ui.date_work_date.date().toString("MM/dd/yyyy")
         code = self.ui.cmb_job_code.currentText().strip()
         layout.addWidget(QLabel(f"<b>{date_text}</b>" + (f" · {code}" if code else "") +
-                                " — who worked and how much each one was paid."))
+                                " — who worked, how much of the day and how much each one was paid."))
 
-        table = QTableWidget(0, 3)
-        table.setHorizontalHeaderLabels(["Helper", "Pay ($)", ""])
+        table = QTableWidget(0, 4)
+        table.setHorizontalHeaderLabels(["Helper", "Day", "Pay ($)", ""])
         table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        table.setColumnWidth(1, 140)
-        table.setColumnWidth(2, 48)
+        table.setColumnWidth(1, 130)
+        table.setColumnWidth(2, 140)
+        table.setColumnWidth(3, 48)
         table.verticalHeader().setVisible(False)
         table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         table.setStyleSheet("QComboBox, QDoubleSpinBox { min-height: 20px; padding: 4px 8px; margin: 4px 4px; }")
@@ -175,10 +179,10 @@ class CrewMixin:
         def update_total():
             total = 0.0
             for r in range(table.rowCount()):
-                total += table.cellWidget(r, 1).value()
+                total += table.cellWidget(r, 2).value()
             lbl_total.setText(f"Total: ${total:,.2f}  ·  {table.rowCount()} helper(s)")
 
-        def add_row(helper_id=None, pay=0.0):
+        def add_row(helper_id=None, pay=0.0, fraction=None):
             r = table.rowCount()
             table.insertRow(r)
             combo = QComboBox()
@@ -193,6 +197,7 @@ class CrewMixin:
             spin.setPrefix("$ ")
             spin.setValue(float(pay or 0))
             spin.valueChanged.connect(lambda *_a: update_total())
+            portion = make_portion_combo(self._day_portion_value() if fraction is None else fraction)
             btn_remove = QPushButton()
             btn_remove.setIcon(tabler_icon("x", "#C62828", 16))
             btn_remove.setToolTip("Remove this helper")
@@ -200,21 +205,22 @@ class CrewMixin:
 
             def remove():
                 for row in range(table.rowCount()):
-                    if table.cellWidget(row, 2) is btn_remove:
+                    if table.cellWidget(row, 3) is btn_remove:
                         table.removeRow(row)
                         break
                 update_total()
             btn_remove.clicked.connect(remove)
-            for w in (combo, spin, btn_remove):
+            for w in (combo, portion, spin, btn_remove):
                 w.setEnabled(not read_only)
             table.setCellWidget(r, 0, combo)
-            table.setCellWidget(r, 1, spin)
-            table.setCellWidget(r, 2, btn_remove)
+            table.setCellWidget(r, 1, portion)
+            table.setCellWidget(r, 2, spin)
+            table.setCellWidget(r, 3, btn_remove)
             table.setRowHeight(r, 50)
             update_total()
 
-        for helper_id, pay in getattr(self, "_job_helpers", []):
-            add_row(helper_id, pay)
+        for entry in getattr(self, "_job_helpers", []):
+            add_row(entry[0], entry[1], entry[2] if len(entry) > 2 else 1.0)
         if not self._job_helpers:
             add_row()
 
@@ -261,7 +267,8 @@ class CrewMixin:
             crew, seen = [], set()
             for r in range(table.rowCount()):
                 hid = table.cellWidget(r, 0).currentData()
-                pay = table.cellWidget(r, 1).value()
+                fraction = float(table.cellWidget(r, 1).currentData() or 1)
+                pay = table.cellWidget(r, 2).value()
                 if hid is None:
                     if pay:
                         QMessageBox.warning(dialog, "Choose the helper", "A row has a pay amount but no helper selected.")
@@ -271,7 +278,7 @@ class CrewMixin:
                     QMessageBox.warning(dialog, "Repeated helper", "The same helper is listed twice.")
                     return
                 seen.add(hid)
-                crew.append([hid, round(pay, 2)])
+                crew.append([hid, round(pay, 2), fraction])
             if crew != getattr(self, "_job_helpers", []):
                 self._job_helpers = crew
                 self._mark_job_form_dirty()
@@ -381,7 +388,7 @@ class CrewMixin:
             cur = conn.cursor()
             cur.execute(f"""
                 SELECT h.HELPER_ID, COALESCE(MAX(NULLIF(he.FULL_NAME, '')), MAX(he.COMPANY_NAME), CONCAT('#', h.HELPER_ID)),
-                       COUNT(DISTINCT wd.WORK_DATE), COALESCE(SUM(h.PAY), 0), {pay_sql}
+                       COALESCE(SUM(h.DAY_FRACTION), 0), COALESCE(SUM(h.PAY), 0), {pay_sql}
                 FROM work_day_helpers h
                 JOIN work_days wd ON wd.ID = h.WORK_DAY_ID
                 LEFT JOIN helpers he ON he.ID = h.HELPER_ID
@@ -403,7 +410,7 @@ class CrewMixin:
             hid, name, days, total = row[0], row[1], row[2], float(row[3] or 0)
             grand += total
             via = " · ".join(f"{labels[c]}: {v}" for c, v in zip(pay_cols, row[4:4 + len(pay_cols)]) if v)
-            for c, text in enumerate([name, str(days), f"${total:,.2f}", via or "—"]):
+            for c, text in enumerate([name, fmt_days(days), f"${total:,.2f}", via or "—"]):
                 item = QTableWidgetItem(text)
                 if c == 0:
                     item.setData(Qt.ItemDataRole.UserRole, hid)
@@ -423,7 +430,7 @@ class CrewMixin:
             conn = self._get_connection()
             cur = conn.cursor()
             cur.execute("""
-                SELECT wd.WORK_DATE, COALESCE(jp.CODE, '—'), COALESCE(wd.JOB_ADDRESS, ''), h.PAY
+                SELECT wd.WORK_DATE, COALESCE(jp.CODE, '—'), COALESCE(wd.JOB_ADDRESS, ''), h.PAY, h.DAY_FRACTION
                 FROM work_day_helpers h JOIN work_days wd ON wd.ID = h.WORK_DAY_ID
                 LEFT JOIN job_projects jp ON jp.ID = wd.JOB_PROJECT_ID
                 WHERE h.HELPER_ID = %s AND wd.WORK_DATE BETWEEN %s AND %s AND COALESCE(wd.STATUS, '') <> 'CANCELLED'
@@ -435,8 +442,8 @@ class CrewMixin:
         except (MySQLError, RuntimeError):
             return
         detail.setRowCount(len(rows))
-        for r, (wdate, code, address, pay) in enumerate(rows):
+        for r, (wdate, code, address, pay, fraction) in enumerate(rows):
             for c, text in enumerate([wdate.strftime("%m/%d/%Y") if wdate else "", code, address,
-                                      f"${float(pay or 0):,.2f}"]):
+                                      f"${float(pay or 0):,.2f}  ·  {portion_label(fraction)}"]):
                 detail.setItem(r, c, QTableWidgetItem(text))
         lbl_detail.setText(f"Days worked by {table.item(row, 0).text()}:")

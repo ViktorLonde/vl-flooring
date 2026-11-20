@@ -67,16 +67,25 @@ try:
         from PySide6.QtWidgets import QTableWidget
         t = d.findChild(QTableWidget)
         next(b for b in d.findChildren(QPushButton) if "Add helper" in b.text()).click()
-        t.cellWidget(0, 0).setCurrentIndex(t.cellWidget(0, 0).findData(h1)); t.cellWidget(0, 1).setValue(150)
-        t.cellWidget(1, 0).setCurrentIndex(t.cellWidget(1, 0).findData(h2)); t.cellWidget(1, 1).setValue(120)
+        t.cellWidget(0, 0).setCurrentIndex(t.cellWidget(0, 0).findData(h1)); t.cellWidget(0, 2).setValue(150)
+        t.cellWidget(1, 0).setCurrentIndex(t.cellWidget(1, 0).findData(h2)); t.cellWidget(1, 2).setValue(120)
+        t.cellWidget(1, 1).setCurrentIndex(t.cellWidget(1, 1).findData(0.333))  # helper 2: 1/3 do dia
         next(b for b in d.findChildren(QPushButton) if b.objectName() == "btn_job_helpers_ok").click()
     dialog_actions.append(fill)
     w.open_job_helpers_dialog(); a.processEvents()
     check("button shows 2 helpers and total", "Helpers (2)" in w.ui.btn_job_helpers.text()
           and "270.00" in w.ui.btn_job_helpers.text(), w.ui.btn_job_helpers.text())
+    w.ui.cmb_day_portion.setCurrentIndex(w.ui.cmb_day_portion.findData(0.333))  # o dia: 1/3 neste job
     msgs.clear(); w.save_job_record(); a.processEvents()
-    crew = q("SELECT HELPER_ID, PAY FROM work_day_helpers WHERE WORK_DAY_ID=%s ORDER BY ID", (target,))
+    crew = q("SELECT HELPER_ID, PAY, DAY_FRACTION FROM work_day_helpers WHERE WORK_DAY_ID=%s ORDER BY ID", (target,))
     check("crew saved (2 helpers)", [(c[0], float(c[1])) for c in crew] == [(h1, 150.0), (h2, 120.0)], crew)
+    check("helper day portion saved", [float(c[2]) for c in crew] == [1.0, 0.333], crew)
+    check("job day portion saved", float(q("SELECT DAY_FRACTION FROM work_days WHERE ID=%s", (target,))[0][0]) == 0.333)
+    w._open_job_by_id(target, None); a.processEvents(); w._job_form_dirty = False
+    w._update_days_worked_label(); a.processEvents()
+    check("days worked label adds the fractions", "⅓" in w.ui.lbl_days_worked_value.text()
+          or q("SELECT COUNT(*) FROM work_days WHERE JOB_PROJECT_ID=(SELECT JOB_PROJECT_ID FROM work_days WHERE ID=%s) "
+               "AND STATUS <> 'CANCELLED'", (target,))[0][0] == 0, w.ui.lbl_days_worked_value.text())
     summ = q("SELECT HELPER_ID, HELPER_PAY FROM work_days WHERE ID=%s", (target,))[0]
     check("day summary = first helper + total pay", summ[0] == h1 and float(summ[1]) == 270.0, summ)
     check("crew NOT copied to other days of the code",
@@ -84,7 +93,8 @@ try:
 
     w._current_job_id = None
     w._open_job_by_id(target, work_date); a.processEvents()
-    check("crew loads back", w._job_helpers == [[h1, 150.0], [h2, 120.0]], w._job_helpers)
+    check("crew loads back", w._job_helpers == [[h1, 150.0, 1.0], [h2, 120.0, 0.333]], w._job_helpers)
+    check("job day portion loads back", abs(w._day_portion_value() - 0.333) < 0.001)
     w._job_form_dirty = False
 
     # lucro e View Project descontam a soma

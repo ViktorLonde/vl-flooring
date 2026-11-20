@@ -887,24 +887,28 @@ class JobsMixin:
             conn = self._get_connection()
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT ID, WORK_DATE, STATUS FROM work_days WHERE JOB_PROJECT_ID = %s ORDER BY WORK_DATE, ID",
+                "SELECT ID, WORK_DATE, STATUS, DAY_FRACTION FROM work_days WHERE JOB_PROJECT_ID = %s "
+                "ORDER BY WORK_DATE, ID",
                 (job_id,),
             )
-            day_rows = cursor.fetchall()
+            day_rows = [(i, d, st, float(fr if fr is not None else 1)) for i, d, st, fr in cursor.fetchall()]
             cursor.close()
             conn.close()
         except (MySQLError, RuntimeError):
             self.ui.lbl_days_worked_value.setText("—")
             return
 
-        days_count = len({d for _i, d, _s in day_rows})
-        self.ui.lbl_days_worked_value.setText(f"🗓 {days_count} day{'s' if days_count != 1 else ''}")
+        from paginas.fracao import fmt_days, days_word, portion_label
+        days_count = sum(fr for _i, _d, st, fr in day_rows if st != "CANCELLED")
+        self.ui.lbl_days_worked_value.setText(f"🗓 {fmt_days(days_count)} {days_word(days_count)}")
         lines = [f"#{i}  {d.strftime('%m/%d/%Y') if d else '?'}  —  {JOB_STATUS_LABELS.get(st, st or '')}"
-                 for i, d, st in day_rows]
+                 + (f"  ·  {portion_label(fr)}" if abs(fr - 1) > 0.01 else "")
+                 for i, d, st, fr in day_rows]
         self.ui.lbl_days_worked_value.setToolTip(f"Days of {typed}:\n" + "\n".join(lines))
         if btn_complete is not None:
             open_days = [r for r in day_rows if r[2] not in ("COMPLETED", "CANCELLED")]
-            btn_complete.setVisible(bool(open_days))
+            btn_complete.setVisible(bool(day_rows))
+            self._style_complete_job_button(btn_complete, bool(day_rows) and not open_days)
         if hasattr(self, "_refresh_photos_button"):
             self._refresh_photos_button()
 
@@ -1286,6 +1290,7 @@ class JobsMixin:
         self.ui.cmb_contractor.setCurrentIndex(0)
         self.ui.cmb_helper.setCurrentIndex(0)
         self._reset_job_helpers()
+        self._set_day_portion(1.0)
         self._set_work_type_list([])
         self.ui.cmb_company_form.setCurrentIndex(0)
         self.ui.cmb_client_city.setCurrentIndex(0)
@@ -1495,6 +1500,7 @@ class JobsMixin:
             self.ui.dspn_value.setValue(float(data.get("VALUE") or 0))
         except (TypeError, ValueError):
             self.ui.dspn_value.setValue(0)
+        self._set_day_portion(data.get("DAY_FRACTION") if data.get("DAY_FRACTION") is not None else 1)
         self.ui.cmb_client_address.setCurrentText(data.get("JOB_ADDRESS") or "")
         self.ui.txt_client_address2.setText(data.get("JOB_ADDRESS2") or "")
         self.ui.txt_client_zip.setText(self._format_zip(data.get("ZIP_CODE")) or "")
@@ -1607,6 +1613,8 @@ class JobsMixin:
             data["HELPER_ID"] = crew_first
         if self._table_column_exists("work_days", "HELPER_PAY"):
             data["HELPER_PAY"] = crew_total
+        if self._table_column_exists("work_days", "DAY_FRACTION"):
+            data["DAY_FRACTION"] = self._day_portion_value()
 
         # Tipos de trabalho: cada combo (ID) + seu spinbox de quantidade
         work_type_fields = [
