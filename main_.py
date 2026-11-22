@@ -163,6 +163,7 @@ class MainWindow(
         self._setup_user_menu()
         self._setup_customer_invoices_button()
         self._setup_restore_backup_button()
+        self._setup_settings_tabs()
         self._setup_dashboard_period_filter()
         self._setup_pnl_period_filter()
         self._setup_1099_year_filter()

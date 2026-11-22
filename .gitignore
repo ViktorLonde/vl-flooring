@@ -28,3 +28,6 @@ job_photos/
 
 # Recibos de despesas (fotos)
 receipts/
+
+# Recibos recebidos por e-mail (fotos)
+receipts_received/

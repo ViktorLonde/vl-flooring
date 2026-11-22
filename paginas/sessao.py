@@ -88,19 +88,15 @@ class SessionMixin:
         s.setValue("ui/jobs_tab", self.ui.tabWidget_jobs.currentIndex())
 
     def restore_ui_state(self):
-        """Chamado depois do login. Volta pra última tela (se o perfil
-        permitir) e devolve True se a janela deve abrir maximizada."""
+        """Chamado depois do login. Sempre abre na Home (pedido do Viktor em
+        2026-11-20 — antes voltava pra última tela usada); as abas internas
+        de Receivables/Jobs continuam lembradas. Devolve True se a janela
+        deve abrir maximizada."""
         s = QSettings(*_SETTINGS)
         geometry = s.value("window/geometry")
         if geometry is not None:
             self.restoreGeometry(geometry)
-        page = s.value("ui/last_page", 0, type=int)
-        buttons = {0: self.ui.btn_home, 1: self.ui.btn_jobs, 2: self.ui.btn_reg_companies,
-                   3: self.ui.btn_reg_contractors, 4: self.ui.btn_reg_work_types, 5: self.ui.btn_nav_receivables,
-                   6: self.ui.btn_customer, 7: self.ui.btn_user, 8: self.ui.btn_reg_products, 9: self.ui.btn_settings,
-                   getattr(self, "_hub_index", -1): self.ui.btn_registrations}
-        if page in buttons and page != 0:
-            self._go_to_page(page, buttons[page])
+        self._go_to_page(0, self.ui.btn_home)
         tab = s.value("ui/receivables_tab", 0, type=int)
         if 0 <= tab < self.ui.tabWidget_receivables.count() and self.ui.tabWidget_receivables.isTabVisible(tab):
             self.ui.tabWidget_receivables.setCurrentIndex(tab)

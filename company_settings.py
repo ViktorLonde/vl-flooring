@@ -23,6 +23,9 @@ COMPANY_BANK_INFO = {
 }
 # Formas de pagamento aceitas, mostradas no invoice.
 COMPANY_PAYMENT_METHODS = ["Zelle", "Check", "Cash", "Bank Transfer"]
+# Detalhe de cada forma (ex.: {"Zelle": "941-382-7383", "Venmo": "@usuario"}),
+# mostrado na invoice ao lado do nome. Editado em Settings → Invoices.
+COMPANY_PAYMENT_DETAILS = {}
 
 # ── ENVIO DE INVOICES POR E-MAIL ──────────────────────────────────────
 # Preencha com os dados do seu provedor de e-mail (Gmail, Outlook, etc.)

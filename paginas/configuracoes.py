@@ -5,6 +5,8 @@ Tela Settings: carrega/salva os dados da empresa e do SMTP (app_settings) e troc
 Métodos da MainWindow (mixin) — veja main_.py.
 """
 
+import json
+
 from app_common import *  # noqa: F401,F403
 
 
@@ -42,6 +44,11 @@ class SettingsMixin:
         }
         if data.get("PAYMENT_METHODS"):
             company_settings.COMPANY_PAYMENT_METHODS = [m.strip() for m in data["PAYMENT_METHODS"].split(",") if m.strip()]
+        if data.get("PAYMENT_DETAILS"):
+            try:
+                company_settings.COMPANY_PAYMENT_DETAILS = dict(json.loads(data["PAYMENT_DETAILS"]))
+            except (ValueError, TypeError):
+                pass
         company_settings.EMAIL_SMTP_HOST = data.get("SMTP_HOST") or company_settings.EMAIL_SMTP_HOST
         company_settings.EMAIL_SMTP_PORT = data.get("SMTP_PORT") or company_settings.EMAIL_SMTP_PORT
         company_settings.EMAIL_SMTP_USER = data.get("SMTP_USER") or company_settings.EMAIL_SMTP_USER
@@ -61,15 +68,11 @@ class SettingsMixin:
         self.ui.txt_settings_bank_account_name.setText(company_settings.COMPANY_BANK_INFO["account_name"])
         self.ui.txt_settings_bank_details.setText(company_settings.COMPANY_BANK_INFO["bank_details"])
 
-        pm_checks = {
-            "Zelle": self.ui.chk_settings_pm_zelle,
-            "Check": self.ui.chk_settings_pm_check,
-            "Cash": self.ui.chk_settings_pm_cash,
-            "Bank Transfer": self.ui.chk_settings_pm_bank_transfer,
-            "Credit Card": self.ui.chk_settings_pm_credit_card,
-        }
-        for label, chk in pm_checks.items():
+        details = company_settings.COMPANY_PAYMENT_DETAILS
+        for label, (chk, txt) in self._settings_payment_widgets().items():
             chk.setChecked(label in company_settings.COMPANY_PAYMENT_METHODS)
+            if txt is not None:
+                txt.setText(details.get(label, ""))
 
         self.ui.txt_settings_smtp_host.setText(company_settings.EMAIL_SMTP_HOST)
         self.ui.spn_settings_smtp_port.setValue(int(company_settings.EMAIL_SMTP_PORT))
@@ -91,14 +94,10 @@ class SettingsMixin:
             QMessageBox.warning(self, "Missing data", "Company Name is required.")
             return
 
-        pm_checks = {
-            "Zelle": self.ui.chk_settings_pm_zelle,
-            "Check": self.ui.chk_settings_pm_check,
-            "Cash": self.ui.chk_settings_pm_cash,
-            "Bank Transfer": self.ui.chk_settings_pm_bank_transfer,
-            "Credit Card": self.ui.chk_settings_pm_credit_card,
-        }
-        selected_methods = [label for label, chk in pm_checks.items() if chk.isChecked()]
+        pm_widgets = self._settings_payment_widgets()
+        selected_methods = [label for label, (chk, _txt) in pm_widgets.items() if chk.isChecked()]
+        payment_details = {label: txt.text().strip() for label, (_chk, txt) in pm_widgets.items()
+                           if txt is not None and txt.text().strip()}
 
         data = {
             "COMPANY_NAME": company_name,
@@ -110,6 +109,7 @@ class SettingsMixin:
             "BANK_ACCOUNT_NAME": self.ui.txt_settings_bank_account_name.text().strip(),
             "BANK_DETAILS": self.ui.txt_settings_bank_details.text().strip(),
             "PAYMENT_METHODS": ", ".join(selected_methods),
+            "PAYMENT_DETAILS": json.dumps(payment_details, ensure_ascii=False),
             "SMTP_HOST": self.ui.txt_settings_smtp_host.text().strip(),
             "SMTP_PORT": self.ui.spn_settings_smtp_port.value(),
             "SMTP_USER": self.ui.txt_settings_smtp_user.text().strip(),
@@ -124,17 +124,18 @@ class SettingsMixin:
                 """
                 INSERT INTO app_settings (ID, COMPANY_NAME, COMPANY_TAGLINE, COMPANY_PHONE, COMPANY_EMAIL,
                     COMPANY_WEBSITE, BANK_ACCOUNT_NO, BANK_ACCOUNT_NAME, BANK_DETAILS, PAYMENT_METHODS,
-                    SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM_NAME)
+                    PAYMENT_DETAILS, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM_NAME)
                 VALUES (1, %(COMPANY_NAME)s, %(COMPANY_TAGLINE)s, %(COMPANY_PHONE)s, %(COMPANY_EMAIL)s,
                     %(COMPANY_WEBSITE)s, %(BANK_ACCOUNT_NO)s, %(BANK_ACCOUNT_NAME)s, %(BANK_DETAILS)s,
-                    %(PAYMENT_METHODS)s, %(SMTP_HOST)s, %(SMTP_PORT)s, %(SMTP_USER)s, %(SMTP_PASSWORD)s,
-                    %(SMTP_FROM_NAME)s)
+                    %(PAYMENT_METHODS)s, %(PAYMENT_DETAILS)s, %(SMTP_HOST)s, %(SMTP_PORT)s, %(SMTP_USER)s,
+                    %(SMTP_PASSWORD)s, %(SMTP_FROM_NAME)s)
                 ON DUPLICATE KEY UPDATE
                     COMPANY_NAME=VALUES(COMPANY_NAME), COMPANY_TAGLINE=VALUES(COMPANY_TAGLINE),
                     COMPANY_PHONE=VALUES(COMPANY_PHONE), COMPANY_EMAIL=VALUES(COMPANY_EMAIL),
                     COMPANY_WEBSITE=VALUES(COMPANY_WEBSITE), BANK_ACCOUNT_NO=VALUES(BANK_ACCOUNT_NO),
                     BANK_ACCOUNT_NAME=VALUES(BANK_ACCOUNT_NAME), BANK_DETAILS=VALUES(BANK_DETAILS),
-                    PAYMENT_METHODS=VALUES(PAYMENT_METHODS), SMTP_HOST=VALUES(SMTP_HOST),
+                    PAYMENT_METHODS=VALUES(PAYMENT_METHODS), PAYMENT_DETAILS=VALUES(PAYMENT_DETAILS),
+                    SMTP_HOST=VALUES(SMTP_HOST),
                     SMTP_PORT=VALUES(SMTP_PORT), SMTP_USER=VALUES(SMTP_USER),
                     SMTP_PASSWORD=VALUES(SMTP_PASSWORD), SMTP_FROM_NAME=VALUES(SMTP_FROM_NAME)
                 """,
@@ -159,6 +160,7 @@ class SettingsMixin:
             "bank_details": data["BANK_DETAILS"],
         }
         company_settings.COMPANY_PAYMENT_METHODS = selected_methods
+        company_settings.COMPANY_PAYMENT_DETAILS = payment_details
         company_settings.EMAIL_SMTP_HOST = data["SMTP_HOST"]
         company_settings.EMAIL_SMTP_PORT = data["SMTP_PORT"]
         company_settings.EMAIL_SMTP_USER = data["SMTP_USER"]
@@ -196,6 +198,206 @@ class SettingsMixin:
         btn.clicked.connect(self.open_restore_backup_dialog)
         layout = self.ui.layout_settings_contents
         layout.insertWidget(layout.indexOf(self.ui.btn_settings_save) + 1, btn)
+        self.ui.btn_open_restore_backup = btn
+
+    # ── formas de pagamento com detalhe ───────────────────────────────
+    # (nome salvo, nome do checkbox no .ui ou None = criado aqui, dica do campo;
+    #  dica None = sem campo de detalhe)
+    _PAYMENT_METHOD_ROWS = [
+        ("Zelle", "chk_settings_pm_zelle", "Phone or e-mail registered in Zelle"),
+        ("Venmo", None, "@username"),
+        ("Cash App", None, "$cashtag"),
+        ("PayPal", None, "PayPal e-mail or paypal.me link"),
+        ("Check", "chk_settings_pm_check", "Payable to (e.g. Vertex Londe Flooring LLC)"),
+        ("Cash", "chk_settings_pm_cash", "Optional note"),
+        ("Bank Transfer", "chk_settings_pm_bank_transfer", None),
+        ("Credit Card", "chk_settings_pm_credit_card", "Payment link or note (e.g. 3% card fee)"),
+    ]
+
+    def _settings_payment_widgets(self):
+        """{forma: (checkbox, campo de detalhe ou None)} na ordem da tela."""
+        if not hasattr(self, "_pm_widgets"):
+            self._setup_payment_method_rows()
+        return self._pm_widgets
+
+    def _setup_payment_method_rows(self):
+        """Troca a fileira de checkboxes de 'Accepted Payment Methods' por uma
+        lista: cada forma com o seu detalhe ao lado (Zelle → telefone, Venmo →
+        @usuário…). O detalhe sai na invoice junto do nome. Venmo, Cash App e
+        PayPal são criados aqui; os outros checkboxes vêm do .ui."""
+        ui = self.ui
+        grp = ui.grp_settings_payment_methods
+        hbox = ui.layout_settings_payment_methods
+        while hbox.count():
+            item = hbox.takeAt(0)
+            if item.widget() is not None:
+                item.widget().setParent(None)
+
+        holder = QWidget(grp)
+        grid = QGridLayout(holder)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(16)
+        grid.setVerticalSpacing(8)
+        grid.setColumnMinimumWidth(0, 150)
+        grid.setColumnStretch(1, 1)
+
+        self._pm_widgets = {}
+        for row, (label, chk_name, hint) in enumerate(self._PAYMENT_METHOD_ROWS):
+            chk = getattr(ui, chk_name) if chk_name else QCheckBox()
+            if not chk_name:
+                attr = "chk_settings_pm_" + label.lower().replace(" ", "_")
+                chk.setObjectName(attr)
+                setattr(ui, attr, chk)
+            chk.setText(label)
+            chk.setParent(holder)
+            grid.addWidget(chk, row, 0)
+            if hint is None:
+                lbl = QLabel("Uses the Bank Information above")
+                lbl.setStyleSheet("color:#6B7C93;")
+                grid.addWidget(lbl, row, 1)
+                txt = None
+            else:
+                txt = QLineEdit(holder)
+                txt.setObjectName("txt_settings_pm_" + label.lower().replace(" ", "_"))
+                txt.setPlaceholderText(hint)
+                txt.setMaximumWidth(520)
+                txt.setEnabled(chk.isChecked())
+                chk.toggled.connect(txt.setEnabled)
+                grid.addWidget(txt, row, 1)
+            self._pm_widgets[label] = (chk, txt)
+        hbox.addWidget(holder, 1)
+
+    # ── preview do bloco de pagamento da invoice ──────────────────────
+    def _build_invoice_payment_preview(self):
+        """Cartão 'Invoice preview' ao lado dos campos da aba Invoices: mostra,
+        enquanto você digita, como o bloco Payment Info / Accepted Methods vai
+        sair na invoice — com os valores da tela, mesmo antes de salvar.
+        Usa a mesma função que monta o PDF (_invoice_payment_info_lines)."""
+        ui = self.ui
+        box = QGroupBox("Invoice preview")
+        box.setObjectName("grp_settings_invoice_preview")
+        box.setMinimumWidth(260)
+        box.setMaximumWidth(380)
+        v = QVBoxLayout(box)
+        v.setContentsMargins(12, 20, 12, 12)
+
+        card = QLabel()
+        card.setObjectName("lbl_settings_invoice_preview")
+        card.setTextFormat(Qt.TextFormat.RichText)
+        card.setWordWrap(True)
+        card.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        card.setMinimumHeight(160)
+        card.setStyleSheet("QLabel { background-color: #FFFFFF; color: #1C2B3A; border: 1px solid #D0D7DE; "
+                           "border-radius: 6px; padding: 14px; font-size: 12px; }")
+        v.addWidget(card)
+
+        hint = QLabel("Updates as you type. Click <b>Save Settings</b> to use it on new invoices.")
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color:#6B7C93;")
+        v.addWidget(hint)
+        ui.lbl_settings_invoice_preview = card
+
+        def refresh(*_args):
+            pm = self._settings_payment_widgets()
+            info = {"account_no": ui.txt_settings_bank_account_no.text().strip(),
+                    "account_name": ui.txt_settings_bank_account_name.text().strip(),
+                    "bank_details": ui.txt_settings_bank_details.text().strip()}
+            methods = [m for m, (chk, _t) in pm.items() if chk.isChecked()]
+            details = {m: t.text().strip() for m, (_c, t) in pm.items() if t is not None}
+            lines = self._invoice_payment_info_lines(info, methods, details)
+            if not methods:
+                lines.append("<i style='color:#C62828'>No payment method selected</i>")
+            card.setText("<br/>".join(lines))
+
+        for txt in (ui.txt_settings_bank_account_no, ui.txt_settings_bank_account_name,
+                    ui.txt_settings_bank_details):
+            txt.textChanged.connect(refresh)
+        for chk, txt in self._settings_payment_widgets().values():
+            chk.toggled.connect(refresh)
+            if txt is not None:
+                txt.textChanged.connect(refresh)
+        self._refresh_invoice_payment_preview = refresh
+        refresh()
+        return box
+
+    # ── abas da tela Settings ─────────────────────────────────────────
+    def _setup_settings_tabs(self):
+        """Reorganiza a tela Settings (que no .ui é uma coluna só) em abas:
+        Company · Invoices · Email · System. Só move os widgets que já
+        existem — os nomes (txt_settings_*, chk_settings_*) e o que é salvo
+        em app_settings continuam iguais. O botão Save fica abaixo das abas
+        e salva tudo de uma vez; some na aba System, que não tem campos."""
+        ui = self.ui
+        layout = ui.layout_settings_contents
+        restore_btn = getattr(ui, "btn_open_restore_backup", None)
+        self._settings_payment_widgets()
+
+        moved = [ui.grp_settings_company, ui.grp_settings_logo, ui.grp_settings_bank,
+                 ui.grp_settings_payment_methods, ui.grp_settings_email, ui.btn_settings_save]
+        if restore_btn is not None:
+            moved.append(restore_btn)
+        for w in moved:
+            layout.removeWidget(w)
+
+        ui.grp_settings_bank.setTitle("Bank Information")
+        ui.grp_settings_payment_methods.setTitle("Accepted Payment Methods")
+        ui.grp_settings_email.setTitle("Email Account")
+
+        def note(text):
+            lbl = QLabel(text)
+            lbl.setWordWrap(True)
+            lbl.setStyleSheet("color:#6B7C93; padding: 2px 4px;")
+            return lbl
+
+        def make_tab(widgets):
+            page = QWidget()
+            v = QVBoxLayout(page)
+            v.setContentsMargins(4, 12, 4, 4)
+            v.setSpacing(12)
+            for w in widgets:
+                v.addWidget(w)
+            v.addStretch(1)
+            return page
+
+        tabs = QTabWidget(ui.scroll_settings_page_contents)
+        tabs.setObjectName("tabs_settings")
+        tabs.setDocumentMode(True)
+        tabs.addTab(make_tab([ui.grp_settings_company, ui.grp_settings_logo]), "Company")
+        invoices_left = make_tab([
+            ui.grp_settings_bank,
+            note("Shown in the <b>Payment Info</b> block of every invoice. While these are still the "
+                 "example values (123456789 / Routing 000000000), invoices leave the bank block out "
+                 "and don't list Bank Transfer — it comes back by itself once the real details are saved."),
+            ui.grp_settings_payment_methods,
+        ])
+        invoices_page = QWidget()
+        h = QHBoxLayout(invoices_page)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(16)
+        h.addWidget(invoices_left, 1)
+        h.addWidget(self._build_invoice_payment_preview(), 0, Qt.AlignmentFlag.AlignTop)
+        tabs.addTab(invoices_page, "Invoices")
+        tabs.addTab(make_tab([
+            ui.grp_settings_email,
+            note("This account <b>sends</b> invoices and other e-mails from the app, and is also the inbox "
+                 "the app <b>reads</b>: send receipts to it with 'recibo' or 'receipt' in the subject "
+                 "(Registrations → Receipt Inbox) and job addresses with 'endereço' or 'obra' "
+                 "(Registrations → Job Site Inbox)."),
+        ]), "Email")
+        system_widgets = []
+        if restore_btn is not None:
+            system_widgets += [note("Bring the database back to how it was on an earlier day. "
+                                    "A backup of the current data is made first, so it can be undone."),
+                               restore_btn]
+        tabs.addTab(make_tab(system_widgets), "System")
+        ui.tabs_settings = tabs
+
+        layout.insertWidget(0, tabs)
+        layout.insertWidget(1, ui.btn_settings_save)
+        layout.addStretch(1)
+
+        system_index = tabs.count() - 1
+        tabs.currentChanged.connect(lambda i: ui.btn_settings_save.setVisible(i != system_index))
 
     def open_restore_backup_dialog(self):
         import backup_db

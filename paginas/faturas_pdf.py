@@ -237,31 +237,49 @@ class InvoicePdfMixin:
     # Valores de exemplo que vêm de fábrica em company_settings.py
     _PLACEHOLDER_BANK_MARKERS = ("123456789", "your bank name", "000000000")
 
-    def _bank_info_is_placeholder(self):
-        info = company_settings.COMPANY_BANK_INFO
+    def _bank_info_is_placeholder(self, info=None):
+        info = company_settings.COMPANY_BANK_INFO if info is None else info
         text = " ".join(str(info.get(k) or "") for k in ("account_no", "bank_details")).lower()
         return (not str(info.get("account_no") or "").strip()
                 or any(marker in text for marker in self._PLACEHOLDER_BANK_MARKERS))
 
     def _confirm_bank_info_ready(self, parent=None):
-        """Avisa se os dados bancários da invoice ainda são os de exemplo.
-        Retorna True se pode continuar."""
-        if not self._bank_info_is_placeholder():
-            return True
-        box = QMessageBox(parent or self)
-        box.setIcon(QMessageBox.Icon.Warning)
-        box.setWindowTitle("Bank details not set")
-        box.setText("The invoice will show the EXAMPLE bank details:")
-        info = company_settings.COMPANY_BANK_INFO
-        box.setInformativeText(
-            f"Account No: {info.get('account_no', '')}\n"
-            f"Bank Details: {info.get('bank_details', '')}\n\n"
-            "Update them in Settings → Bank Information before sending invoices to customers.")
-        continue_btn = box.addButton("Continue anyway", QMessageBox.ButtonRole.AcceptRole)
-        cancel_btn = box.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
-        box.setDefaultButton(cancel_btn)
-        box.exec()
-        return box.clickedButton() is continue_btn
+        """Antes avisava que a invoice sairia com os dados bancários de
+        exemplo. Agora, enquanto forem os de exemplo, a invoice simplesmente
+        não mostra o bloco de conta (ver _invoice_payment_info_lines), então
+        não há mais o que avisar. Mantido pra não mexer nos chamadores."""
+        return True
+
+    def _invoice_payment_info_lines(self, info=None, methods=None, details=None):
+        """Linhas do bloco 'Payment Info' da invoice. Com os dados bancários
+        de exemplo, esconde conta/routing e tira 'Bank Transfer' dos métodos
+        aceitos; quando os dados reais forem salvos em Settings → Invoices,
+        o bloco volta sozinho. Sem argumentos usa o que está salvo; o preview
+        de Settings passa os valores digitados (ainda não salvos)."""
+        from xml.sax.saxutils import escape
+        info = company_settings.COMPANY_BANK_INFO if info is None else info
+        methods = list(company_settings.COMPANY_PAYMENT_METHODS if methods is None else methods)
+        if details is None:
+            details = getattr(company_settings, "COMPANY_PAYMENT_DETAILS", {}) or {}
+        lines = []
+        if self._bank_info_is_placeholder(info):
+            methods = [m for m in methods if m != "Bank Transfer"]
+        else:
+            lines += ["<b>Payment Info:</b>",
+                      f"Account No: {escape(str(info.get('account_no') or ''))}",
+                      f"A/C Name: {escape(str(info.get('account_name') or ''))}",
+                      f"Bank Details: {escape(str(info.get('bank_details') or ''))}",
+                      ""]
+        # Cada forma com o seu detalhe (Settings → Invoices), ex. "Zelle: 941-382-7383".
+        # Sem nenhum detalhe preenchido, continua numa linha só como antes.
+        lines.append("<b>Accepted Methods:</b>")
+        if any(details.get(m) for m in methods):
+            for m in methods:
+                d = (details.get(m) or "").strip()
+                lines.append(f"{escape(m)}: {escape(d)}" if d else escape(m))
+        else:
+            lines.append(escape(", ".join(methods)))
+        return lines
 
     def _build_invoice_pdf(self, filepath, invoice_number, entity_label, entity_name, entity_contact_lines,
                             d_from_qdate, d_to_qdate, item_rows, jobs_total, has_expenses, expenses_rows,
@@ -423,14 +441,7 @@ class InvoicePdfMixin:
         story.append(Spacer(1, 22))
 
         # ── Payment Info + status ──
-        bank_html = "<br/>".join([
-            "<b>Payment Info:</b>",
-            f"Account No: {company_settings.COMPANY_BANK_INFO['account_no']}",
-            f"A/C Name: {company_settings.COMPANY_BANK_INFO['account_name']}",
-            f"Bank Details: {company_settings.COMPANY_BANK_INFO['bank_details']}",
-            "<br/><b>Accepted Methods:</b>",
-            ", ".join(company_settings.COMPANY_PAYMENT_METHODS),
-        ])
+        bank_html = "<br/>".join(self._invoice_payment_info_lines())
         status_color_map = {"PENDING": "#E65100", "PARTIAL": "#1565C0", "RECEIVED": "#2E7D32"}
         status_color = status_color_map.get(status, BRAND_NAVY)
         status_html = (
