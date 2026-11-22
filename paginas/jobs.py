@@ -275,10 +275,14 @@ class JobsMixin:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT COALESCE(c.COMPANY_NAME, c.FULL_NAME, '—'), wd.JOB_ADDRESS, COALESCE(city.CITY, ''),
-                       wd.VALUE, wd.STATUS
+                SELECT COALESCE(NULLIF(c.COMPANY_NAME, ''), NULLIF(c.FULL_NAME, ''), NULLIF(co.COMPANY_NAME, ''),
+                                NULLIF(cl.FULL_NAME, ''), '—'),
+                       wd.JOB_ADDRESS, COALESCE(city.CITY, ''), wd.VALUE, wd.STATUS, wd.ID, jp.CODE, wd.WORK_DATE
                 FROM work_days wd
                 LEFT JOIN contractors c ON c.ID = wd.CONTRACTOR_ID
+                LEFT JOIN companies co ON co.ID = wd.COMPANY_ID
+                LEFT JOIN clients cl ON cl.ID = wd.CLIENT_ID
+                LEFT JOIN job_projects jp ON jp.ID = wd.JOB_PROJECT_ID
                 LEFT JOIN cities city ON city.ID = wd.CITY_ID
                 WHERE wd.WORK_DATE = %s
                 ORDER BY wd.ID
@@ -296,10 +300,24 @@ class JobsMixin:
             list_widget.addItem("No jobs scheduled for this day.")
             return
 
-        for contractor, address, city, value, status in rows:
+        from PySide6.QtWidgets import QListWidgetItem
+        for who, address, city, value, status, day_id, code, work_date in rows:
             status_label = JOB_STATUS_LABELS.get(status, status)
-            text = f"{contractor} — {address or ''}{', ' + city if city else ''} — ${float(value or 0):,.2f} — {status_label or status}"
-            list_widget.addItem(text)
+            place = f"{address or ''}{', ' + city if city else ''}" or "no address"
+            text = (f"{code + '  ·  ' if code else ''}{who} — {place} — ${float(value or 0):,.2f} — "
+                    f"{status_label or status}")
+            item = QListWidgetItem(text)
+            item.setData(Qt.ItemDataRole.UserRole, (day_id, work_date))
+            item.setToolTip("Click to open this day for editing")
+            list_widget.addItem(item)
+
+    def open_schedule_job(self, item):
+        """Clique num job da lista do Schedule → abre o dia no formulário de edição."""
+        data = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+        if not data:
+            return  # linha "No jobs scheduled for this day."
+        day_id, work_date = data
+        self._open_job_by_id(day_id, work_date)
 
     def _setup_job_date_filter_defaults(self):
         """Define os valores padrão do filtro de data da lista de Work Days:

@@ -664,6 +664,8 @@ class MainWindow(
         self.ui.btn_toggle_expenses_table_expanded.clicked.connect(self._toggle_expenses_table_expanded)
         self.ui.btn_toggle_customers_table_expanded.clicked.connect(self._toggle_customers_table_expanded)
         self.ui.btn_refresh_customers.clicked.connect(self.load_customers)
+        self.ui.list_schedule_jobs.itemClicked.connect(self.open_schedule_job)
+        self.ui.list_schedule_jobs.setCursor(Qt.CursorShape.PointingHandCursor)
         self.ui.txt_product_type.editingFinished.connect(self._suggest_unit_for_product_type)
         self.ui.dspn_product_price.valueChanged.connect(self._update_product_unit_price_display)
         self.ui.dspn_product_coverage_qty.valueChanged.connect(self._update_product_unit_price_display)
