@@ -904,8 +904,17 @@ class ToolsMixin:
         btn_save.setIcon(tabler_icon("device-floppy", "#FFFFFF", 16))
         btn_save.setStyleSheet(_PRIMARY_BTN)
         btn_close = QPushButton("Close")
+        btn_email = QPushButton("  Send by e-mail")
+        btn_email.setObjectName("btn_email_estimate")
+        btn_email.setIcon(tabler_icon("send", "#37474F", 16))
+        btn_suggest = QPushButton("  Suggest prices")
+        btn_suggest.setObjectName("btn_suggest_estimate_prices")
+        btn_suggest.setIcon(tabler_icon("cash", "#37474F", 16))
+        btn_suggest.setToolTip("Fill $0 services with your Service Rates or the average $/SF of past jobs")
         buttons.addWidget(btn_pdf)
+        buttons.addWidget(btn_email)
         buttons.addWidget(btn_convert)
+        buttons.addWidget(btn_suggest)
         buttons.addStretch(1)
         buttons.addWidget(btn_close)
         buttons.addWidget(btn_save)
@@ -991,6 +1000,30 @@ class ToolsMixin:
                 save(silent=True)
             QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
+        def send_email():
+            if not REPORTLAB_AVAILABLE:
+                QMessageBox.critical(dialog, "Missing Dependency", "The 'reportlab' package is not installed.")
+                return
+            if not save(silent=True):
+                return
+            args = (state["code"], cmb_client.currentText().strip(), txt_email.text(), txt_phone.text(),
+                    txt_address.text(), txt_city.text(), d_valid.date().toPython(), collect_items(), total(),
+                    txt_notes.toPlainText())
+            sent = self.email_estimate(dialog, state["id"], state["code"], args[1], txt_email.text().strip(),
+                                       ", ".join(x for x in (txt_address.text().strip(), txt_city.text().strip()) if x),
+                                       total(), args[6], lambda p: self._build_estimate_pdf(p, *args))
+            if sent and cmb_status.currentText() == "DRAFT":
+                cmb_status.setCurrentText("SENT")
+
+        def suggest():
+            rows = []
+            for r in range(table.rowCount()):
+                kind, _pid = table.item(r, 0).data(Qt.ItemDataRole.UserRole)
+                if kind == "SERVICE":
+                    rows.append((table.cellWidget(r, 1).text().strip(), table.cellWidget(r, 3).text().strip(),
+                                 table.cellWidget(r, 4)))
+            self.suggest_estimate_prices(dialog, rows, cmb_client.currentData())
+
         def convert():
             if not save(silent=True):
                 return
@@ -1067,6 +1100,9 @@ class ToolsMixin:
 
         btn_save.clicked.connect(lambda: save())
         btn_pdf.clicked.connect(make_pdf)
+        btn_email.clicked.connect(send_email)
+        btn_suggest.clicked.connect(suggest)
+        dialog._send_email, dialog._suggest, dialog._add_line = send_email, suggest, add_line  # testes
         btn_convert.clicked.connect(convert)
         btn_close.clicked.connect(dialog.reject)
         dialog.exec()

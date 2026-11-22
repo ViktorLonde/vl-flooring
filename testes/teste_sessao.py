@@ -36,7 +36,7 @@ appmod.start_session()
 main, login = appmod._session["main"], appmod._session["login"]
 login.login_successful.emit("viktorlonde"); a.processEvents()
 check("login opens main window", main.isVisible() and main._current_username == "viktorlonde")
-check("reopens last page (Customer)", main.ui.Pages.currentIndex() == 6, main.ui.Pages.currentIndex())
+check("always opens on Home (since 2026-11-20)", main.ui.Pages.currentIndex() == 0, main.ui.Pages.currentIndex())
 
 layout = main.ui.layout_home_revenue_chart
 check("revenue chart has 6 months", layout.count() in (1, 6), layout.count())

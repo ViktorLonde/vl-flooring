@@ -61,6 +61,26 @@ _TOOL_CARDS = [
      "btn_reg_receipt_inbox", None),
     ("job_site", "map-pin", "Job Site Inbox", "Job site visits from e-mail",
      "btn_reg_job_site_inbox", "SELECT COUNT(*) FROM job_site_visits"),
+    ("day_inbox", "inbox", "Work Day Inbox", "E-mail 'dia JB-0032' from the phone → the day is logged",
+     "btn_tool_work_day_inbox", None),
+    ("material_inbox", "package", "Material Inbox", "E-mail 'material JB-0032' + one material per line",
+     "btn_tool_material_inbox", None),
+    ("statements", "file-type-pdf", "Customer Statements", "Open invoices by customer, 30/60/90 — PDF + e-mail",
+     "btn_tool_statements",
+     "SELECT (SELECT COUNT(DISTINCT CONTRACTOR_ID) FROM contractor_invoices WHERE STATUS IN ('PENDING','PARTIAL')) + "
+     "(SELECT COUNT(DISTINCT COMPANY_ID) FROM company_invoices WHERE STATUS IN ('PENDING','PARTIAL')) + "
+     "(SELECT COUNT(DISTINCT CLIENT_ID) FROM client_invoices WHERE STATUS IN ('PENDING','PARTIAL'))"),
+    ("price_sf", "chart-bar", "Price per SF", "Value, material and profit per square foot — by job and service",
+     "btn_tool_price_sf", None),
+    ("cash_forecast", "cash", "Cash Forecast", "Next 30 days: what comes in and what goes out",
+     "btn_tool_cash_forecast", None),
+    ("tax_reserve", "building-bank", "Tax Reserve", "How much to set aside for the IRS estimated payments",
+     "btn_tool_tax_reserve", None),
+    ("stock_alerts", "alert-triangle", "Stock Alerts", "Minimum per product — Home warns when it's low",
+     "btn_tool_stock_alerts", "SELECT COUNT(*) FROM products p WHERE p.MIN_STOCK > 0 AND p.MIN_STOCK > "
+                              "COALESCE((SELECT SUM(m.QUANTITY) FROM inventory_moves m WHERE m.PRODUCT_ID = p.ID), 0)"),
+    ("followups", "send", "Follow-ups", "30 days: review / referral · 1 year: warranty check",
+     "btn_tool_followups", None),
     ("estimates", "receipt", "Estimates", "Quotes with PDF — convert to a job",
      "btn_tool_estimates", "SELECT COUNT(*) FROM estimates WHERE STATUS IN ('DRAFT','SENT','APPROVED')"),
     ("calculator", "calculator", "Material Calculator", "Boxes and buckets for an area",
@@ -99,6 +119,7 @@ _COUNT_LABELS = {
     "estimates": "open", "mileage": "miles this year",
     "purchases": "this month", "stock": "products in stock", "board": "open job codes",
     "cleanup": "to fix", "rates": "services priced", "calendar": "days scheduled",
+    "statements": "with open invoices", "stock_alerts": "below minimum",
 }
 
 
@@ -203,7 +224,8 @@ class RegistrationsHubMixin:
         card = getattr(self, "_hub_cards", {}).get("bank")
         if card is not None:
             card.setVisible(self._role_rule("admin_pages"))
-        for key in ("weekly", "accountant", "earnings"):  # valores e helper pay — só quem vê as finanças
+        for key in ("weekly", "accountant", "earnings", "statements", "price_sf", "cash_forecast",
+                    "tax_reserve"):  # valores e helper pay — só quem vê as finanças
             card = getattr(self, "_hub_cards", {}).get(key)
             if card is not None:
                 card.setVisible(self._role_rule("finance"))

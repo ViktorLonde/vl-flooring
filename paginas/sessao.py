@@ -151,6 +151,11 @@ class SessionMixin:
             items.append(("clipboard-list", "#1565C0",
                           f"{plural(incomplete, 'job')} from the last 30 days missing information",
                           self.open_incomplete_jobs_dialog))
+        if hasattr(self, "_extra_attention_items"):
+            try:
+                items += self._extra_attention_items()
+            except Exception:
+                logging.getLogger("vl_flooring").exception("extra attention items failed")
         return items
 
     def _backup_attention_item(self):

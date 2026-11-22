@@ -557,7 +557,12 @@ class OperationsMixin:
         btn_wa.setIcon(tabler_icon("send", "#37474F", 16))
         btn_pdf = QPushButton("  Save PDF")
         btn_pdf.setIcon(tabler_icon("download", "#37474F", 16))
-        for b in (btn_copy, btn_wa, btn_pdf):
+        btn_mail = QPushButton("  E-mail each helper")
+        btn_mail.setObjectName("btn_email_helpers_week")
+        btn_mail.setIcon(tabler_icon("users", "#37474F", 16))
+        btn_mail.setToolTip("Each helper gets only their own days and addresses")
+        btn_mail.clicked.connect(lambda: self.email_week_to_helpers(dialog, state["monday"], state["rows"]))
+        for b in (btn_copy, btn_wa, btn_pdf, btn_mail):
             buttons.addWidget(b)
         buttons.addStretch(1)
         layout.addLayout(buttons)

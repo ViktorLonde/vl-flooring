@@ -56,6 +56,7 @@ def start_session():
         login.deleteLater()
         main_window.show_attention_summary()
         QTimer.singleShot(4000, main_window._auto_send_weekly_summary)
+        QTimer.singleShot(6000, main_window._auto_send_compliance_reminders)
 
     def on_signed_out():
         old = main_window

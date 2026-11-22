@@ -1504,6 +1504,8 @@ class InvoicesMixin:
             cmb_status.setCurrentIndex(cmb_status.findData(new_status))
             self.load_contractor_invoices()
             self.load_receivables_dashboard()
+            if hasattr(self, "offer_payment_receipt"):
+                self.offer_payment_receipt(dialog, entity_type, invoice_id, amount, paid_date_str, method)
 
         def open_pdf():
             """Abre o PDF salvo da invoice no visualizador padrao do sistema, se o arquivo ainda existir no caminho salvo."""

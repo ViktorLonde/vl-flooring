@@ -1,3 +1,20 @@
+# ✅ FEITO em 21/11/2026 — todas as ideias abaixo foram implementadas
+
+- Registrations → **Work Day Inbox**, **Material Inbox**, **Customer Statements**, **Price per SF**,
+  **Cash Forecast**, **Tax Reserve**, **Stock Alerts**, **Follow-ups**
+- Recibo de pagamento: aparece sozinho depois de registrar um pagamento (e-mail configurado)
+- Estimate: botões **Send by e-mail** e **Suggest prices**
+- Schedule → Share week: botão **E-mail each helper** (precisa do e-mail no cadastro do helper)
+- Compliance: e-mail para você 30 e 7 dias antes de vencer (destino = e-mail do Weekly Summary)
+- Job: botão **Sign-off PDF** (checklist + fotos After + assinatura)
+- Banco: migration-emails-pos-job.sql (aplicado com aplicar_migracao_2111.py, backup antes)
+- Teste: testes/teste_emails_pos_job.py
+
+Ainda do seu lado: e-mail dos helpers e dos clientes, Service Rates, preços $0, dados bancários,
+SF real nos Work Types (para o Price per SF ficar preciso), mínimos em Stock Alerts.
+
+---
+
 # Ideias para as próximas melhorias (salvas em 20/11/2026)
 
 Agora que o e-mail funciona:

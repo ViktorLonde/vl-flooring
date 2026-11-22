@@ -466,8 +466,13 @@ class ReceivablesMixin:
                 QMessageBox.critical(dialog, "Database Error", f"Could not record payment:\n{e}")
                 return
 
-            QMessageBox.information(dialog, "Success", "Payment recorded successfully.")
             self.load_receivables_dashboard()
+            sent = False
+            if hasattr(self, "offer_payment_receipt"):
+                sent = self.offer_payment_receipt(dialog, entity_type, invoice_id, amount,
+                                                  date_paid.date().toString("yyyy-MM-dd"), cmb_method.currentText())
+            if not sent:
+                QMessageBox.information(dialog, "Success", "Payment recorded successfully.")
             dialog.accept()
 
         btn_cancel.clicked.connect(dialog.reject)

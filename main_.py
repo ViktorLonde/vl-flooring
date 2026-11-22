@@ -47,10 +47,18 @@ from paginas.hoje import TodayMixin
 from paginas.rateio import ExpenseSplitMixin
 from paginas.email_teste import EmailTestMixin
 from paginas.contador import AccountantMixin
+from paginas.inbox_trabalho import WorkInboxMixin
+from paginas.emails_clientes import CustomerEmailsMixin
+from paginas.financas import FinanceInsightsMixin
+from paginas.pos_job import AfterJobMixin
 from PySide6.QtCore import Signal
 
 
 class MainWindow(
+    WorkInboxMixin,
+    CustomerEmailsMixin,
+    FinanceInsightsMixin,
+    AfterJobMixin,
     EmailTestMixin,
     TodayMixin,
     ExpenseSplitMixin,
@@ -156,6 +164,9 @@ class MainWindow(
         self._setup_title_case_fields()
         self._setup_zip_suggestions()
         self._refresh_material_product_combo()
+        self._setup_work_inboxes()
+        self._setup_finance_tools()
+        self._setup_after_job_tools()
         self._setup_registrations_hub()
         self._setup_icon_theme()
         self._setup_modern_ui()
