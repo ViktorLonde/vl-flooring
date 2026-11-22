@@ -647,6 +647,105 @@ class RegistrationsMixin:
         self.new_work_type_record()
         self.ui.tabWidget_work_types_page.setCurrentWidget(self.ui.tab_work_types_master)
 
+    # Colunas antigas de work_days que apontam para work_types (FK)
+    _WT_DAY_COLUMNS = [f"{p}_{n}_ID" for p, k in (("DEMOLITION", 4), ("INSTALLATION", 4), ("PREPARATION", 4),
+                                                   ("OTHERS", 2), ("REPARO", 2)) for n in range(1, k + 1)]
+
+    def _work_type_usage(self, wid):
+        """{'days': nº de dias que usam, 'codes': [Job Codes], 'rates': nº de Service Rates}"""
+        conn = self._get_connection()
+        cur = conn.cursor()
+        cols = " OR ".join(f"wd.{c} = %s" for c in self._WT_DAY_COLUMNS)
+        cur.execute(f"""
+            SELECT wd.ID, COALESCE(jp.CODE, '') FROM work_days wd LEFT JOIN job_projects jp ON jp.ID = wd.JOB_PROJECT_ID
+            WHERE {cols} OR EXISTS (SELECT 1 FROM work_day_work_types x WHERE x.WORK_DAY_ID = wd.ID AND x.WORK_TYPE_ID = %s)
+            """, tuple([wid] * (len(self._WT_DAY_COLUMNS) + 1)))
+        rows = cur.fetchall()
+        cur.execute("SELECT COUNT(*) FROM service_rates WHERE WORK_TYPE_ID = %s", (wid,))
+        rates = cur.fetchone()[0] or 0
+        cur.close()
+        conn.close()
+        codes = sorted({c for _i, c in rows if c})
+        return {"days": len(rows), "codes": codes, "rates": rates}
+
+    def _ask_work_type_replacement(self, wid, usage):
+        """Pergunta qual serviço fica no lugar. Devolve o ID escolhido ou None (cancelou)."""
+        conn = self._get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT CATEGORY, NAME, UNIT FROM work_types WHERE ID = %s", (wid,))
+        cat, name, unit = cur.fetchone()
+        cur.execute("SELECT ID, CATEGORY, NAME, UNIT FROM work_types WHERE ID <> %s "
+                    "ORDER BY CATEGORY = %s DESC, CATEGORY, NAME", (wid, cat))
+        others = cur.fetchall()
+        cur.close()
+        conn.close()
+        d = QDialog(self)
+        d.setWindowTitle("Work type in use")
+        lay = QVBoxLayout(d)
+        codes = ", ".join(usage["codes"][:12]) + ("…" if len(usage["codes"]) > 12 else "")
+        rates = f" and {usage['rates']} Service Rate(s)" if usage["rates"] else ""
+        msg = QLabel(f"<b>{(cat or '').title()} — {name}</b> ({unit or ''}) is used in <b>{usage['days']} day(s)</b>"
+                     f"{rates}{f' (jobs {codes})' if codes else ''}, so it can't simply be deleted.<br><br>"
+                     f"Choose the work type that takes its place in those days. Then this one is deleted.")
+        msg.setWordWrap(True)
+        lay.addWidget(msg)
+        combo = QComboBox()
+        combo.addItem("— choose —", None)
+        for oid, ocat, oname, ounit in others:
+            combo.addItem(f"{(ocat or '').title()} — {oname} ({ounit or ''})", oid)
+        lay.addWidget(combo)
+        row = QHBoxLayout()
+        row.addStretch(1)
+        cancel, ok = QPushButton("Cancel (keep it)"), QPushButton("Replace and delete")
+        row.addWidget(cancel)
+        row.addWidget(ok)
+        lay.addLayout(row)
+        result = {"id": None}
+
+        def accept():
+            if not combo.currentData():
+                QMessageBox.information(d, "Work type", "Choose the work type that takes its place.")
+                return
+            result["id"] = combo.currentData()
+            d.accept()
+
+        ok.clicked.connect(accept)
+        cancel.clicked.connect(d.reject)
+        d._combo, d._accept = combo, accept  # testes
+        d.exec()
+        return result["id"]
+
+    def _replace_and_delete_work_type(self, old_id, new_id=None):
+        """Troca old_id por new_id em todos os dias (lista nova e colunas antigas)
+        e nas Service Rates, depois apaga old_id — tudo numa transação."""
+        conn = self._get_connection()
+        cur = conn.cursor()
+        try:
+            if new_id:
+                for col in self._WT_DAY_COLUMNS:
+                    cur.execute(f"UPDATE work_days SET {col} = %s WHERE {col} = %s", (new_id, old_id))
+                # dia que já tem os dois: soma a quantidade na linha do novo e tira a do antigo
+                cur.execute("UPDATE work_day_work_types n JOIN work_day_work_types o ON o.WORK_DAY_ID = n.WORK_DAY_ID "
+                            "AND o.WORK_TYPE_ID = %s SET n.QTY = n.QTY + o.QTY WHERE n.WORK_TYPE_ID = %s",
+                            (old_id, new_id))
+                cur.execute("DELETE o FROM work_day_work_types o JOIN work_day_work_types n ON n.WORK_DAY_ID = o.WORK_DAY_ID "
+                            "AND n.WORK_TYPE_ID = %s WHERE o.WORK_TYPE_ID = %s", (new_id, old_id))
+                cur.execute("UPDATE work_day_work_types SET WORK_TYPE_ID = %s WHERE WORK_TYPE_ID = %s", (new_id, old_id))
+                # Service Rate: se o novo já tem preço para o mesmo cliente, fica o dele
+                cur.execute("DELETE o FROM service_rates o JOIN service_rates n ON n.WORK_TYPE_ID = %s "
+                            "AND n.ENTITY_TYPE = o.ENTITY_TYPE AND n.ENTITY_ID <=> o.ENTITY_ID "
+                            "WHERE o.WORK_TYPE_ID = %s", (new_id, old_id))
+                cur.execute("UPDATE service_rates SET WORK_TYPE_ID = %s WHERE WORK_TYPE_ID = %s", (new_id, old_id))
+            cur.execute("DELETE FROM work_types WHERE ID = %s", (old_id,))
+            conn.commit()
+            logging.getLogger("vl_flooring").info("work type %s deleted (replaced by %s)", old_id, new_id)
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
+            conn.close()
+
     def delete_work_type_record(self):
         """Exclui o tipo de trabalho atualmente carregado no formulário."""
         if not getattr(self, "_current_work_type_id", None):
@@ -654,26 +753,37 @@ class RegistrationsMixin:
                                      "Select a work type from the list before deleting.")
             return
 
-        confirm = QMessageBox.question(
-            self, "Confirm delete",
-            f"Are you sure you want to delete work type #{self._current_work_type_id}?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-        )
-        if confirm != QMessageBox.StandardButton.Yes:
+        old_id = self._current_work_type_id
+        try:
+            usage = self._work_type_usage(old_id)
+        except (MySQLError, RuntimeError) as e:
+            QMessageBox.critical(self, "Database Error", f"Could not check where this work type is used:\n{e}")
             return
 
+        replacement = None
+        if usage["days"] or usage["rates"]:
+            # Em uso: o banco não deixa apagar. Oferece trocar por outro serviço antes.
+            replacement = self._ask_work_type_replacement(old_id, usage)
+            if replacement is None:
+                return
+        else:
+            confirm = QMessageBox.question(
+                self, "Confirm delete",
+                f"Are you sure you want to delete work type #{old_id}?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if confirm != QMessageBox.StandardButton.Yes:
+                return
+
         try:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM work_types WHERE ID = %s", (self._current_work_type_id,))
-            conn.commit()
-            cursor.close()
-            conn.close()
+            self._replace_and_delete_work_type(old_id, replacement)
         except (MySQLError, RuntimeError) as e:
             QMessageBox.critical(self, "Database Error", f"Could not delete work type:\n{e}")
             return
+        self._service_rates = None  # recarrega as Service Rates
 
-        QMessageBox.information(self, "Deleted", "Work type deleted.")
+        QMessageBox.information(self, "Deleted", "Work type deleted." if replacement is None else
+                                f"Work type replaced in {usage['days']} day(s) and deleted.")
         self.new_work_type_record()
         self.load_work_types()
         self.ui.tabWidget_work_types_page.setCurrentWidget(self.ui.tab_work_types_master)
