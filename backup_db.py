@@ -27,7 +27,21 @@ from datetime import datetime
 from config import load_db_config
 
 BACKUP_DIR = r"C:\VL_Backups\mysql"
-CLOUD_DIR = os.path.join(os.environ.get("OneDrive", ""), "VL_Backups", "mysql") if os.environ.get("OneDrive") else None
+def _cloud_dir():
+    """Cópia na nuvem: Backups da pasta de arquivos quando ela está dentro do
+    Google Drive; senão OneDrive (como antes)."""
+    try:
+        import arquivos
+        root = arquivos.files_root()
+        if arquivos.using_google_drive(root):
+            return os.path.join(root, arquivos.SUBFOLDERS["backups"])
+    except Exception:
+        pass
+    od = os.environ.get("OneDrive")
+    return os.path.join(od, "VL_Backups", "mysql") if od else None
+
+
+CLOUD_DIR = _cloud_dir()
 KEEP_DAYS = 30
 MYSQLDUMP_CANDIDATES = [
     r"C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqldump.exe",

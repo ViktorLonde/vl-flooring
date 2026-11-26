@@ -7,6 +7,7 @@ Métodos da MainWindow (mixin) — veja main_.py.
 """
 
 from app_common import *  # noqa: F401,F403
+import arquivos
 
 
 class ComplianceMixin:
@@ -710,7 +711,7 @@ class ComplianceMixin:
             if r < 0 or r not in row_data:
                 QMessageBox.information(dialog, "No selection", "Select a document first.")
                 return
-            file_path = row_data[r]["FILE_PATH"]
+            file_path = arquivos.resolve(row_data[r]["FILE_PATH"])
             if not file_path or not os.path.exists(file_path):
                 QMessageBox.warning(dialog, "File Not Found",
                                      "This file's path doesn't exist on this computer.\n\n"

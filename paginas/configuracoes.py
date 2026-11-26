@@ -7,7 +7,10 @@ Métodos da MainWindow (mixin) — veja main_.py.
 
 import json
 
+from PySide6.QtCore import QSettings
+
 from app_common import *  # noqa: F401,F403
+import arquivos
 
 
 class SettingsMixin:
@@ -384,7 +387,7 @@ class SettingsMixin:
                  "(Registrations → Receipt Inbox) and job addresses with 'endereço' or 'obra' "
                  "(Registrations → Job Site Inbox)."),
         ]), "Email")
-        system_widgets = []
+        system_widgets = [self._files_folder_box()]
         if restore_btn is not None:
             system_widgets += [note("Bring the database back to how it was on an earlier day. "
                                     "A backup of the current data is made first, so it can be undone."),
@@ -398,6 +401,112 @@ class SettingsMixin:
 
         system_index = tabs.count() - 1
         tabs.currentChanged.connect(lambda i: ui.btn_settings_save.setVisible(i != system_index))
+
+    # ── pasta de arquivos (invoices, fotos, recibos…) ─────────────────
+    def _files_folder_box(self):
+        box = QGroupBox("Files folder")
+        v = QVBoxLayout(box)
+        self._lbl_files_root = QLabel()
+        self._lbl_files_root.setWordWrap(True)
+        self._lbl_files_root.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        v.addWidget(self._lbl_files_root)
+        row = QHBoxLayout()
+        btn_open = QPushButton("  Open files folder")
+        btn_change = QPushButton("  Change location…")
+        btn_move = QPushButton("  Move old files here")
+        for b in (btn_open, btn_change, btn_move):
+            row.addWidget(b)
+        row.addStretch(1)
+        v.addLayout(row)
+        btn_open.clicked.connect(self.open_files_folder)
+        btn_change.clicked.connect(self.change_files_folder)
+        btn_move.clicked.connect(lambda: self.move_old_files(ask=True))
+        self._refresh_files_folder_label()
+        return box
+
+    def _refresh_files_folder_label(self):
+        lbl = getattr(self, "_lbl_files_root", None)
+        if lbl is None:
+            return
+        root = arquivos.files_root()
+        where = ("<span style='color:#2E7D32'>Inside Google Drive — saved in the cloud.</span>"
+                 if arquivos.using_google_drive(root) else
+                 "<span style='color:#E65100'>To keep a copy in the cloud: in Google Drive for desktop open "
+                 "Preferences → <b>Folders from my computer</b> → Add folder, and choose this folder.</span>")
+        subs = ", ".join(arquivos.SUBFOLDERS.values())
+        lbl.setText(f"<b>{root}</b><br>{where}<br><span style='color:#6B7C93'>Invoices and estimates are "
+                    f"saved here automatically, with job photos and receipts. Subfolders: {subs}.</span>")
+
+    def open_files_folder(self):
+        root = arquivos.ensure_structure()
+        QDesktopServices.openUrl(QUrl.fromLocalFile(root))
+
+    def change_files_folder(self):
+        start = arquivos.find_google_drive() or arquivos.files_root()
+        chosen = QFileDialog.getExistingDirectory(self, "Choose where the VL Flooring files go", start)
+        if not chosen:
+            return
+        chosen = os.path.normpath(chosen)
+        if os.path.basename(chosen) != arquivos.ROOT_NAME:
+            chosen = os.path.join(chosen, arquivos.ROOT_NAME)
+        old = arquivos.files_root()
+        arquivos.set_root(chosen)
+        arquivos.ensure_structure(chosen)
+        self._refresh_files_folder_label()
+        if os.path.normcase(old) != os.path.normcase(chosen):
+            self.move_old_files(ask=True, old_root=old)
+        QMessageBox.information(self, "Files folder",
+                                f"New files will be saved in:\n{chosen}\n\n"
+                                "Restart the app so every screen uses the new folder.")
+
+    def move_old_files(self, ask=True, old_root=None):
+        n = arquivos.pending_moves()
+        extra = old_root and os.path.isdir(old_root)
+        if not n and not extra:
+            if ask:
+                QMessageBox.information(self, "Files folder", "Nothing to move — all files are already here.")
+            return
+        if ask:
+            answer = QMessageBox.question(
+                self, "Move files",
+                f"Move the existing photos, receipts and PDFs into\n{arquivos.files_root()}?\n\n"
+                "The jobs, invoices and expenses keep pointing to them.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes)
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            conn = self._get_connection()
+            try:
+                files, rows = arquivos.move_everything(conn, old_root=old_root)
+            finally:
+                conn.close()
+        except Exception as e:
+            QApplication.restoreOverrideCursor()
+            logging.getLogger("vl_flooring").exception("move files failed")
+            QMessageBox.critical(self, "Move files", f"Could not move the files:\n{e}")
+            return
+        QApplication.restoreOverrideCursor()
+        from paginas.moderno import show_toast
+        show_toast(f"{files} file(s) moved to the files folder ({rows} record(s) updated).", "success", self)
+
+    def _check_files_folder_on_start(self):
+        """Ao abrir: cria as subpastas e, se ainda há arquivos nas pastas
+        antigas (job_photos, receipts_received, D:\\VL_Flooring\\Files…),
+        oferece mover (uma vez por dia)."""
+        try:
+            arquivos.ensure_structure()
+        except OSError as e:
+            logging.getLogger("vl_flooring").warning("could not create files folder: %s", e)
+            return
+        if not arquivos.pending_moves():
+            return
+        settings = QSettings("VL Flooring", "app")
+        today = date.today().isoformat()
+        if settings.value("files/move_asked") == today:
+            return
+        settings.setValue("files/move_asked", today)
+        QTimer.singleShot(1500, lambda: self.move_old_files(ask=True))
 
     def open_restore_backup_dialog(self):
         import backup_db

@@ -25,6 +25,7 @@ from datetime import date, timedelta
 from PySide6.QtWidgets import QInputDialog
 
 from app_common import *  # noqa: F401,F403
+import arquivos
 from paginas import correio
 from paginas.correio import normalize
 from paginas.fracao import DAY_PORTIONS, make_portion_combo, portion_label
@@ -648,16 +649,15 @@ class WorkInboxMixin:
                     cur.execute("INSERT INTO job_materials (JOB_PROJECT_ID, PRODUCT_ID, QUANTITY, UNIT_PRICE) "
                                 "VALUES (%s,%s,%s,%s)", (project_id, pid, qty, price))
                 n += 1
-            folder = os.path.join(PROJECT_DIR, "receipts_received")
             for name, data, _ctype in attachments or ():
-                os.makedirs(folder, exist_ok=True)
+                folder = arquivos.folder("receipts", code)
                 safe = "".join(ch for ch in name if ch.isalnum() or ch in "._-") or "receipt.jpg"
                 path = os.path.join(folder, f"{datetime.now():%Y%m%d_%H%M%S}_{code}_{safe}")
                 with open(path, "wb") as f:
                     f.write(data)
                 cur.execute("INSERT INTO documents (CATEGORY, ENTITY_TYPE, ENTITY_ID, NAME, FILE_PATH, NOTES) "
                             "VALUES ('Material Receipt', 'JOB_PROJECT', %s, %s, %s, %s)",
-                            (project_id, name, os.path.relpath(path, PROJECT_DIR), "Received by e-mail"))
+                            (project_id, name, arquivos.to_stored(path), "Received by e-mail"))
             conn.commit()
         except Exception:
             conn.rollback()

@@ -20,6 +20,9 @@ dump = subprocess.run([os.path.join(BIN, "mysqldump.exe"), f"--defaults-extra-fi
 subprocess.run([os.path.join(BIN, "mysql.exe"), f"--defaults-extra-file={cnf.name}", TEST_DB], input=dump, check=True)
 TEST = {**REAL, "database": TEST_DB}
 tmpdir = tempfile.mkdtemp()
+import arquivos
+FILES_TMP = os.path.join(tmpdir, 'files')
+arquivos.files_root = lambda: FILES_TMP  # fotos/PDFs do teste não vão para a pasta real
 
 msgs = []
 QMessageBox.information = staticmethod(lambda *a, **k: msgs.append(str(a[2])) or QMessageBox.StandardButton.Ok)
@@ -111,9 +114,9 @@ try:
     rows = q("SELECT FILE_PATH FROM documents WHERE ENTITY_TYPE='JOB_PROJECT' AND ENTITY_ID=%s", (pid,))
     check("photo saved and listed", state.get("photos") == 1 and len(rows) == 1, (state.get("photos"), rows))
     if rows:
-        full = os.path.join(ROOT, rows[0][0]); photo_folder = os.path.dirname(full)
+        full = arquivos.resolve(rows[0][0]); photo_folder = os.path.dirname(full)
         saved = QImage(full)
-        check("photo stored resized in job_photos/<code>", os.path.exists(full) and max(saved.width(), saved.height()) <= 2000,
+        check("photo stored resized in Job Photos/<code>", os.path.exists(full) and max(saved.width(), saved.height()) <= 2000,
               rows[0][0])
     check("Photos button shows the count", "Photos (1)" in ui.btn_job_photos.text(), ui.btn_job_photos.text())
 
@@ -153,7 +156,9 @@ try:
     w.open_estimate_editor(None); a.processEvents()
     est = q("SELECT CODE, TOTAL, STATUS, JOB_PROJECT_ID FROM estimates ORDER BY ID DESC LIMIT 1")
     check("estimate saved with total", est and float(est[0][1]) >= 1750, est)
-    check("estimate PDF created", os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 1000)
+    est_dir = os.path.join(FILES_TMP, "Estimates")
+    est_pdfs = [os.path.join(est_dir, f) for f in os.listdir(est_dir)] if os.path.isdir(est_dir) else []
+    check("estimate PDF saved in Estimates folder", est_pdfs and os.path.getsize(est_pdfs[0]) > 1000, est_pdfs)
     check("estimate converted", est and est[0][2] == "CONVERTED" and est[0][3], est)
     if est and est[0][3]:
         job = q("SELECT jp.CODE, wd.STATUS, wd.NOTE, c.FULL_NAME FROM job_projects jp JOIN work_days wd ON wd.JOB_PROJECT_ID=jp.ID "

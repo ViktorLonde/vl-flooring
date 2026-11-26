@@ -27,10 +27,11 @@ from PySide6.QtGui import QImage, QIcon
 from PySide6.QtWidgets import QInputDialog, QListWidget, QListWidgetItem
 
 from app_common import *  # noqa: F401,F403
+import arquivos
 from paginas.visual import tabler_icon
 from paginas.moderno import show_toast
 
-PHOTOS_DIR = os.path.join(PROJECT_DIR, "job_photos")
+# fotos ficam em <pasta de arquivos>\Job Photos\<JOB CODE> (ver arquivos.py)
 PHOTO_CATEGORIES = ["Before", "Progress", "After"]
 ESTIMATE_STATUSES = ["DRAFT", "SENT", "APPROVED", "DECLINED", "CONVERTED"]
 DEFAULT_MILEAGE_RATE = 0.70  # US$ por milha — confira a taxa do IRS do ano em Mileage
@@ -259,7 +260,7 @@ class ToolsMixin:
 
     @staticmethod
     def _photo_abs_path(path):
-        return path if os.path.isabs(path) else os.path.join(PROJECT_DIR, path)
+        return arquivos.resolve(path)
 
     def open_job_photos_dialog(self):
         code, project_id = self._current_project()
@@ -341,8 +342,7 @@ class ToolsMixin:
                                                     "Images (*.jpg *.jpeg *.png *.heic *.webp *.bmp)")
             if not files:
                 return
-            folder = os.path.join(PHOTOS_DIR, code)
-            os.makedirs(folder, exist_ok=True)
+            folder = arquivos.folder("photos", code)
             category = cmb_cat.currentText()
             added, failed = 0, []
             QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
@@ -368,7 +368,7 @@ class ToolsMixin:
                         if not img.save(target, "JPG", 85):
                             failed.append(os.path.basename(src))
                             continue
-                    rel = os.path.relpath(target, PROJECT_DIR)
+                    rel = arquivos.to_stored(target)
                     cur.execute("INSERT INTO documents (CATEGORY, ENTITY_TYPE, ENTITY_ID, NAME, FILE_PATH, NOTES) "
                                 "VALUES (%s, 'JOB_PROJECT', %s, %s, %s, %s)",
                                 (f"Job Photo - {category}", project_id, os.path.basename(src), rel, ""))
@@ -409,7 +409,8 @@ class ToolsMixin:
                 for item in items:
                     did, full = item.data(Qt.ItemDataRole.UserRole)
                     cur.execute("DELETE FROM documents WHERE ID = %s", (did,))
-                    if full.startswith(PHOTOS_DIR) and os.path.exists(full):
+                    if (arquivos.is_inside(full) or arquivos.is_inside(full, os.path.join(PROJECT_DIR, "job_photos"))) \
+                            and os.path.exists(full):
                         os.remove(full)
                 conn.commit()
                 cur.close()
@@ -419,8 +420,7 @@ class ToolsMixin:
             reload()
 
         def open_folder():
-            folder = os.path.join(PHOTOS_DIR, code)
-            os.makedirs(folder, exist_ok=True)
+            folder = arquivos.folder("photos", code)
             QDesktopServices.openUrl(QUrl.fromLocalFile(folder))
 
         cmb_filter.currentIndexChanged.connect(lambda *_a: reload())
@@ -981,12 +981,10 @@ class ToolsMixin:
                 return
             if not save(silent=True):
                 return
-            path, _ = QFileDialog.getSaveFileName(dialog, "Save estimate PDF", f"Estimate_{state['code']}.pdf",
-                                                  "PDF Files (*.pdf)")
-            if not path:
-                return
-            if not path.lower().endswith(".pdf"):
-                path += ".pdf"
+            # salva sozinho em <pasta de arquivos>\Estimates (Settings → System)
+            safe = "".join(ch for ch in cmb_client.currentText().strip() if ch.isalnum() or ch in " _-").strip()
+            path = os.path.join(arquivos.folder("estimates"),
+                                f"Estimate_{state['code']}" + (f"_{safe}" if safe else "") + ".pdf")
             try:
                 self._build_estimate_pdf(path, state["code"], cmb_client.currentText().strip(), txt_email.text(),
                                          txt_phone.text(), txt_address.text(), txt_city.text(),

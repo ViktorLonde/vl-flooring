@@ -19,6 +19,7 @@ from datetime import date, timedelta
 
 from app_common import *  # noqa: F401,F403
 import registro
+import arquivos
 from paginas import correio
 from paginas.correio import esc
 from paginas.moderno import show_toast
@@ -219,7 +220,7 @@ class AfterJobMixin:
         d["materials"] = cur.fetchall()
         cur.execute("SELECT FILE_PATH FROM documents WHERE ENTITY_TYPE='JOB_PROJECT' AND ENTITY_ID=%s "
                     "AND CATEGORY = 'Job Photo - After' ORDER BY UPLOADED_AT DESC, ID DESC LIMIT 4", (project_id,))
-        d["photos"] = [p if os.path.isabs(p) else os.path.join(PROJECT_DIR, p) for (p,) in cur.fetchall() if p]
+        d["photos"] = [arquivos.resolve(p) for (p,) in cur.fetchall() if p]
         cur.close()
         conn.close()
         d["customer"] = d.get("CLIENT") or d.get("DAY_CLIENT") or d.get("PARTNER") or ""

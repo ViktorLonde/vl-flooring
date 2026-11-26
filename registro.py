@@ -19,7 +19,10 @@ from logging.handlers import RotatingFileHandler
 
 LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
 LOG_FILE = os.path.join(LOG_DIR, "vl_flooring.log")
-EXPORTS_DIR = os.path.join(os.path.expanduser("~"), "Documents", "VL Flooring")
+import arquivos  # noqa: E402
+
+# pasta principal de arquivos (Google Drive quando instalado) — ver arquivos.py
+EXPORTS_DIR = arquivos.files_root()
 
 log = logging.getLogger("vl_flooring")
 
@@ -88,8 +91,7 @@ def install_default_save_folder():
             directory = kwargs.pop("dir")
         if directory and not os.path.isabs(directory) and not os.path.dirname(directory):
             try:
-                os.makedirs(EXPORTS_DIR, exist_ok=True)
-                directory = os.path.join(EXPORTS_DIR, directory)
+                directory = os.path.join(arquivos.folder("reports"), directory)
             except OSError:
                 pass
         return original(parent, caption, directory, *args, **kwargs)

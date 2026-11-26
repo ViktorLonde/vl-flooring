@@ -7,6 +7,7 @@ Métodos da MainWindow (mixin) — veja main_.py.
 """
 
 from app_common import *  # noqa: F401,F403
+import arquivos
 
 
 class InboxMixin:
@@ -183,9 +184,8 @@ class InboxMixin:
                 return
             c = found_emails[r]
 
-            receipts_dir = os.path.join(PROJECT_DIR, "receipts_received")
             try:
-                os.makedirs(receipts_dir, exist_ok=True)
+                receipts_dir = arquivos.folder("receipts")
                 safe_name = "".join(ch for ch in c["attachment_name"] if ch.isalnum() or ch in "._-") or "receipt"
                 uid_str = c["uid"].decode() if isinstance(c["uid"], bytes) else str(c["uid"])
                 dest_path = os.path.join(receipts_dir, f"{uid_str}_{safe_name}")

@@ -6,6 +6,7 @@ Métodos da MainWindow (mixin) — veja main_.py.
 """
 
 from app_common import *  # noqa: F401,F403
+import arquivos
 
 
 class InvoicesMixin:
@@ -740,7 +741,11 @@ class InvoicesMixin:
                                          "Select at least one job first.")
                 return
 
-            out_dir = QFileDialog.getExistingDirectory(dialog, "Choose folder to save the invoices")
+            # salva sozinho em <pasta de arquivos>\Invoices\<ano> (Settings → System)
+            try:
+                out_dir = arquivos.folder("invoices", str(date_to.date().year()))
+            except OSError:
+                out_dir = QFileDialog.getExistingDirectory(dialog, "Choose folder to save the invoices")
             if not out_dir:
                 return
 

@@ -31,3 +31,7 @@ receipts/
 
 # Recibos recebidos por e-mail (fotos)
 receipts_received/
+
+# pasta de arquivos local (sem Google Drive) e escolha da pasta
+Files/
+files_location.json
