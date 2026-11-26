@@ -530,7 +530,9 @@ class AfterJobMixin:
     def _extra_attention_items(self):
         """Itens novos do 'Needs your attention' (chamado por sessao.py)."""
         items = []
-        for maker in ("_statement_attention_item", "_tax_attention_item"):
+        if hasattr(self, "_weekly_invoice_attention_items"):
+            items += self._weekly_invoice_attention_items()
+        for maker in ("_statement_attention_item", "_tax_attention_item", "_data_check_attention_item"):
             fn = getattr(self, maker, None)
             item = fn() if fn else None
             if item:

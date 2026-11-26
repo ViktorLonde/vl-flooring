@@ -388,6 +388,8 @@ class SettingsMixin:
                  "(Registrations → Job Site Inbox)."),
         ]), "Email")
         system_widgets = [self._files_folder_box()]
+        if hasattr(self, "_daily_summary_card"):
+            system_widgets.append(self._daily_summary_card())
         if restore_btn is not None:
             restore_btn.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
             system_widgets.append(self._settings_card(

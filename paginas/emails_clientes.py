@@ -178,13 +178,23 @@ class CustomerEmailsMixin:
     def offer_payment_receipt(self, parent, kind, invoice_id, amount, paid_date, method):
         """Chamado depois de gravar um pagamento. Só pergunta se o e-mail
         está configurado; sem e-mail do cliente, deixa digitar."""
-        if not correio.smtp_ready():
-            return False
+        paid_pdf = None
         try:
             info = self._invoice_partner(kind, invoice_id)
         except (MySQLError, RuntimeError):
             return False
         if not info:
+            return False
+        if info["paid"] >= info["total"] - 0.005 and hasattr(self, "_build_paid_invoice_pdf"):
+            # pago por completo: gera a invoice marcada PAID IN FULL (vai anexada no recibo)
+            try:
+                paid_pdf = self._build_paid_invoice_pdf(kind, invoice_id)
+                self._last_paid_pdf = paid_pdf
+            except Exception:
+                logging.getLogger("vl_flooring").exception("paid invoice PDF failed")
+        if not correio.smtp_ready():
+            if paid_pdf:
+                show_toast(f"Paid invoice saved: {os.path.basename(paid_pdf)}", "success", self)
             return False
         if isinstance(paid_date, str):
             try:
@@ -198,7 +208,13 @@ class CustomerEmailsMixin:
         subject = f"Payment received — invoice #{invoice_id} — {company_settings.COMPANY_NAME}"
         note = "Send a thank-you receipt for this payment?" + ("" if info["email"] else
                                                                 "  (No e-mail on file for this customer.)")
-        sent = self._compose_dialog(parent or self, "Payment receipt", info["email"], subject, body, note=note)
+        attachments = ()
+        if paid_pdf:
+            note = ("Paid in full — the invoice marked PAID IN FULL is attached. " + note)
+            body += "\n\nThe invoice marked PAID IN FULL is attached for your records."
+            attachments = (paid_pdf,)
+        sent = self._compose_dialog(parent or self, "Payment receipt", info["email"], subject, body,
+                                    attachments=attachments, note=note)
         if sent:
             show_toast(f"Receipt sent to {self._last_compose.get('to')}.", "success", self)
         return sent

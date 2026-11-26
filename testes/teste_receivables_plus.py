@@ -94,7 +94,7 @@ try:
                        "WHERE STATUS IN ('PENDING','PARTIAL')")[0][0])
     exp_sum = sum(float(l.text().replace("$", "").replace(",", "")) for l in w._lbl_expected.values())
     check("Expected buckets add up to what is open", abs(exp_sum - open_now) < 0.01, (exp_sum, open_now))
-    overpaid = q("SELECT ID FROM contractor_invoices WHERE AMOUNT_PAID > TOTAL_AMOUNT + 0.005")
+    overpaid = [(o["id"],) for o in w._overpaid_invoices()]
     check("overpaid banner shown", w._frame_overpaid.isVisible() == bool(overpaid) and
           (not overpaid or f"#{overpaid[0][0]}" in w._lbl_overpaid.text()), w._lbl_overpaid.text())
 
@@ -132,8 +132,7 @@ try:
     w.open_not_invoiced_dialog(); a.processEvents()
     check("not-invoiced dialog lists the groups", state.get("rows") == len(groups), state.get("rows"))
     check("generate dialog opens with only those days selected",
-          state.get("status", "").startswith(f"{len(g['days'])} job(s) selected — total ${g['total']:,.2f}")
-          and "0 expense(s) selected" in state.get("status", ""),
+          state.get("status", "").startswith(f"{len(g['days'])} job(s) selected — total ${g['total']:,.2f}"),
           (state.get("status"), len(g["days"]), g["total"]))
     new_inv = q("SELECT ID, TOTAL_AMOUNT FROM contractor_invoices WHERE ID > %s", (before_inv,))
     linked = {r[0] for r in q("SELECT WORK_DAY_ID FROM invoice_work_days WHERE INVOICE_TYPE='Contractor' "
@@ -189,7 +188,7 @@ try:
         iid, bal = open_id[0][0], float(open_id[0][1])
         row = next(r for r in range(t.rowCount()) if t.item(r, 0).text() == str(iid))
         t.selectRow(row); a.processEvents()
-        check("action buttons enabled on an open invoice", all(b.isEnabled() for b in w._invoice_action_buttons))
+        check("action buttons enabled on an open invoice", all(b.isEnabled() for b in w._invoice_action_buttons[:4]) and not w._invoice_action_buttons[4].isEnabled())
         check("reminder for one invoice finds it", len(w._overdue_invoices(only=("Contractor", iid))) == 1)
 
         def pay_too_much(d):

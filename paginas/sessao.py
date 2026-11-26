@@ -19,6 +19,7 @@ from PySide6.QtWidgets import QMenu
 
 from app_common import *  # noqa: F401,F403
 from paginas.visual import tabler_icon
+from paginas.fluxo import FlowLayout
 
 _SETTINGS = ("VL Flooring", "app")
 
@@ -232,16 +233,22 @@ class SessionMixin:
         head.addWidget(title, 1)
         head.addWidget(close)
         outer.addLayout(head)
-        row = QHBoxLayout()
-        row.setSpacing(8)
+        # os avisos quebram linha quando não cabem — a Home nunca fica mais larga que a janela
+        chips = QWidget()
+        chips.setObjectName("frame_attention_chips")
+        row = FlowLayout(chips, spacing=8)
         for icon, color, text, action in items:
             btn = QPushButton(f"  {text}")
             btn.setIcon(tabler_icon(icon, color, 16))
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setToolTip(text)
+            btn.setMinimumWidth(160)
             btn.clicked.connect(action)
             row.addWidget(btn)
-        row.addStretch(1)
-        outer.addLayout(row)
+        sp = chips.sizePolicy()
+        sp.setHeightForWidth(True)
+        chips.setSizePolicy(sp)
+        outer.addWidget(chips)
         self.ui.layout_home_page.insertWidget(0, frame)
         self.ui.frame_attention = frame
         total = len(items)

@@ -30,6 +30,7 @@ from paginas.despesas import ExpensesMixin
 from paginas.permissoes import PermissionsMixin
 from paginas.visual import VisualMixin, SIDEBAR_ITEMS
 from paginas.recebiveis_plus import ReceivablesPlusMixin
+from paginas.controle import ControlMixin
 from paginas.moderno import ModernMixin
 from paginas.tema import ThemeMixin
 from paginas.sessao import SessionMixin
@@ -56,6 +57,7 @@ from PySide6.QtCore import Signal
 
 
 class MainWindow(
+    ControlMixin,
     ReceivablesPlusMixin,
     WorkInboxMixin,
     CustomerEmailsMixin,

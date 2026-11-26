@@ -68,6 +68,27 @@ class InvoicePdfMixin:
         except MySQLError:
             logging.getLogger("vl_flooring").exception("could not link invoice %s days", invoice_id)
 
+    @staticmethod
+    def _has_invoice_expenses_table(cursor):
+        try:
+            cursor.execute("SHOW TABLES LIKE 'invoice_expenses'")
+            return cursor.fetchone() is not None
+        except MySQLError:
+            return False
+
+    @staticmethod
+    def _link_invoice_expenses(cursor, kind, invoice_id, expense_ids):
+        """Grava quais despesas foram cobradas neste invoice (não entram de
+        novo, por padrão, no próximo)."""
+        expense_ids = [e for e in expense_ids if e]
+        if not expense_ids:
+            return
+        try:
+            cursor.executemany("INSERT IGNORE INTO invoice_expenses (INVOICE_TYPE, INVOICE_ID, EXPENSE_ID) "
+                               "VALUES (%s, %s, %s)", [(kind, invoice_id, e) for e in expense_ids])
+        except MySQLError:
+            logging.getLogger("vl_flooring").exception("could not link invoice %s expenses", invoice_id)
+
     def _fetch_invoice_jobs(self, cursor, fk_col, fk_id, d_from, d_to, partner_table, partner_fk_col,
                              partner_name_col, job_ids=None):
         """Busca os jobs de uma entidade (contractor/company/client) no período,
@@ -283,10 +304,13 @@ class InvoicePdfMixin:
 
     def _build_invoice_pdf(self, filepath, invoice_number, entity_label, entity_name, entity_contact_lines,
                             d_from_qdate, d_to_qdate, item_rows, jobs_total, has_expenses, expenses_rows,
-                            expenses_total, discount, addition, tax_percent, status):
+                            expenses_total, discount, addition, tax_percent, status,
+                            payments=None, invoice_date=None):
         """Monta visualmente o PDF do invoice (logo + cores da marca Vertex Londe),
         com tabela de itens, ajustes de desconto/acréscimo/taxa, informações de
-        pagamento e status. Usado por Contractor, Company e Client."""
+        pagamento e status. Usado por Contractor, Company e Client.
+        payments=[(data, valor, forma)] → versão PAGA: selo PAID IN FULL e a
+        lista de pagamentos recebidos (para mandar ao cliente depois de pago)."""
         styles = getSampleStyleSheet()
         cell_style = ParagraphStyle("cell", parent=styles["Normal"], fontSize=8.5, leading=11)
         right_style = ParagraphStyle("right", parent=styles["Normal"], alignment=TA_RIGHT)
@@ -352,7 +376,7 @@ class InvoicePdfMixin:
         invoice_to_html = "<br/>".join([f"<b>Invoice To ({entity_label}):</b>", f"<b>{entity_name}</b>"] + entity_contact_lines)
         info_html = "<br/>".join([
             f"<b>Invoice #:</b> {invoice_number}",
-            f"<b>Invoice Date:</b> {date.today().strftime('%m/%d/%Y')}",
+            f"<b>Invoice Date:</b> {(invoice_date or date.today()).strftime('%m/%d/%Y')}",
             f"<b>Period:</b> {d_from_qdate.toString('MM/dd/yyyy')} – {d_to_qdate.toString('MM/dd/yyyy')}",
             f"<b>Payment Status:</b> {status_label}",
         ])
@@ -363,6 +387,17 @@ class InvoicePdfMixin:
         info_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
         story.append(info_table)
         story.append(Spacer(1, 18))
+        if payments:
+            last_paid = max(d for d, _a, _m in payments)
+            stamp = Table([[Paragraph(
+                f"<para alignment='center'><font size=20 color='#2E7D32'><b>PAID IN FULL</b></font><br/>"
+                f"<font size=9 color='#2E7D32'>on {last_paid.strftime('%m/%d/%Y')} — thank you!</font></para>",
+                ParagraphStyle("paid_stamp", parent=styles["Normal"], leading=26))]], colWidths=[3.2 * inch])
+            stamp.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 2, colors.HexColor("#2E7D32")),
+                                       ("TOPPADDING", (0, 0), (-1, -1), 8), ("BOTTOMPADDING", (0, 0), (-1, -1), 8)]))
+            stamp.hAlign = "CENTER"
+            story.append(stamp)
+            story.append(Spacer(1, 16))
 
         # ── Tabela de itens (jobs) ──
         table_data = [["Date", "Address", "Work Done", "Value"]] + item_rows
@@ -440,6 +475,29 @@ class InvoicePdfMixin:
         story.append(wrapper)
         story.append(Spacer(1, 22))
 
+        if payments:
+            story.append(Paragraph("<b>Payments Received</b>", styles["Heading4"]))
+            pay_rows = [["Date", "Method", "Amount"]] + [
+                [d.strftime("%m/%d/%Y"), m or "", f"${float(a):,.2f}"] for d, a, m in payments]
+            paid_total = sum(float(a) for _d, a, _m in payments)
+            pay_rows.append(["", "Total paid", f"${paid_total:,.2f}"])
+            pay_rows.append(["", "Balance due", f"${max(grand_total - paid_total, 0):,.2f}"])
+            pay_table = Table(pay_rows, colWidths=[1.2 * inch, 3.3 * inch, 1.5 * inch])
+            pay_table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2E7D32")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+                ("GRID", (0, 0), (-1, -3), 0.5, colors.HexColor("#DDDDDD")),
+                ("ALIGN", (-1, 0), (-1, -1), "RIGHT"),
+                ("ALIGN", (1, -2), (1, -1), "RIGHT"),
+                ("FONTNAME", (0, -2), (-1, -1), "Helvetica-Bold"),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ]))
+            story.append(pay_table)
+            story.append(Spacer(1, 22))
+
         # ── Payment Info + status ──
         bank_html = "<br/>".join(self._invoice_payment_info_lines())
         status_color_map = {"PENDING": "#E65100", "PARTIAL": "#1565C0", "RECEIVED": "#2E7D32"}
@@ -468,6 +526,88 @@ class InvoicePdfMixin:
         doc.build(story, canvasmaker=_InvoiceNumberedCanvas)
         return grand_total
 
+    # tipo → (tabela, tabela do pagador, coluna do pagador, nome do pagador, contraparte: tabela/coluna/nome)
+    _PAID_KIND = {
+        "Contractor": ("contractor_invoices", "contractors", "CONTRACTOR_ID",
+                       "COALESCE(NULLIF(r.COMPANY_NAME, ''), r.FULL_NAME)", "clients", "CLIENT_ID", "FULL_NAME"),
+        "Company": ("company_invoices", "companies", "COMPANY_ID", "r.COMPANY_NAME", "clients", "CLIENT_ID", "FULL_NAME"),
+        "Client": ("client_invoices", "clients", "CLIENT_ID", "r.FULL_NAME", "companies", "COMPANY_ID", "COMPANY_NAME"),
+    }
+
+    def _build_paid_invoice_pdf(self, kind, invoice_id):
+        """Gera a versão PAGA de uma invoice (mesmos dias e despesas, selo PAID IN
+        FULL e os pagamentos recebidos) na pasta de arquivos, em Invoices/<ano>.
+        Devolve o caminho do PDF."""
+        import arquivos
+        table, ref, fk, name_sql, ptable, pfk, pname = self._PAID_KIND[kind]
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            exp_col = "t.EXPENSES_TOTAL" if kind == "Contractor" else "0"
+            cursor.execute(f"""
+                SELECT t.{fk}, COALESCE({name_sql}, '—'), t.PERIOD_FROM, t.PERIOD_TO, {exp_col}, t.TOTAL_AMOUNT,
+                       t.GENERATED_AT
+                FROM {table} t LEFT JOIN {ref} r ON r.ID = t.{fk} WHERE t.ID = %s""", (invoice_id,))
+            row = cursor.fetchone()
+            if not row:
+                raise RuntimeError(f"Invoice #{invoice_id} not found.")
+            entity_id, entity_name, d_from, d_to, exp_total_saved, total, generated = row
+            cursor.execute(f"SELECT EMAIL, PHONE_NUMBER FROM {ref} WHERE ID = %s", (entity_id,))
+            contact = cursor.fetchone() or (None, None)
+            contact_lines = [x for x in (contact[0], self._format_phone(contact[1]) if contact[1] else None) if x]
+            cursor.execute("SELECT WORK_DAY_ID FROM invoice_work_days WHERE INVOICE_TYPE=%s AND INVOICE_ID=%s",
+                           (kind, invoice_id))
+            day_ids = [r[0] for r in cursor.fetchall()]
+            wt_lookup = self._get_work_type_lookup(cursor)
+            jobs = self._fetch_invoice_jobs(cursor, fk, entity_id, d_from, d_to, ptable, pfk, pname,
+                                            job_ids=day_ids or None)
+            expenses = []
+            if kind == "Contractor" and float(exp_total_saved or 0) > 0:
+                linked = []
+                if self._has_invoice_expenses_table(cursor):
+                    cursor.execute("SELECT EXPENSE_ID FROM invoice_expenses WHERE INVOICE_TYPE=%s AND INVOICE_ID=%s",
+                                   (kind, invoice_id))
+                    linked = [r[0] for r in cursor.fetchall()]
+                if linked:
+                    cursor.execute("SELECT EXPENSE_DATE, CATEGORY, DESCRIPTION, AMOUNT FROM expenses WHERE ID IN ("
+                                   + ",".join(["%s"] * len(linked)) + ") ORDER BY EXPENSE_DATE", linked)
+                else:
+                    cursor.execute("SELECT EXPENSE_DATE, CATEGORY, DESCRIPTION, AMOUNT FROM expenses "
+                                   "WHERE CONTRACTOR_ID=%s AND EXPENSE_DATE BETWEEN %s AND %s ORDER BY EXPENSE_DATE",
+                                   (entity_id, d_from, d_to))
+                expenses = cursor.fetchall()
+            cursor.execute("SELECT PAID_DATE, AMOUNT, PAYMENT_METHOD FROM payments WHERE INVOICE_TYPE=%s "
+                           "AND INVOICE_ID=%s ORDER BY PAID_DATE, ID", (kind, invoice_id))
+            payments = cursor.fetchall()
+        finally:
+            cursor.close()
+            conn.close()
+        if not payments:
+            raise RuntimeError(f"Invoice #{invoice_id} has no payments yet.")
+
+        styles = getSampleStyleSheet()
+        cell_style = ParagraphStyle("cell_p", parent=styles["Normal"], fontSize=8.5, leading=11)
+        options = {"group_same_date": True, "show_qty": True}
+        item_rows, jobs_total = self._prepare_invoice_item_rows(jobs, wt_lookup, options, cell_style)
+        expenses_rows, expenses_total = [], 0.0
+        for exp_date, category, description, amount in expenses:
+            expenses_total += float(amount or 0)
+            expenses_rows.append([exp_date.strftime("%m/%d/%Y"), category, description or "",
+                                  f"${float(amount or 0):,.2f}"])
+        # o total tem que ser o mesmo da invoice original (desconto/acréscimo/taxa viram um ajuste)
+        diff = round(float(total or 0) - (jobs_total + expenses_total), 2)
+        discount, addition = (-diff, 0.0) if diff < 0 else (0.0, diff)
+        safe = "".join(c if c.isalnum() or c in " _-" else "" for c in entity_name).strip().replace(" ", "_")
+        path = os.path.join(arquivos.folder("invoices", str(d_to.year)),
+                            f"Invoice_{invoice_id}_{safe}_{d_from}_to_{d_to}_PAID.pdf")
+        gen = generated.date() if hasattr(generated, "date") else generated
+        self._build_invoice_pdf(
+            path, invoice_id, kind, entity_name, contact_lines,
+            QDate(d_from.year, d_from.month, d_from.day), QDate(d_to.year, d_to.month, d_to.day),
+            item_rows, jobs_total, kind == "Contractor" and bool(expenses_rows), expenses_rows, expenses_total,
+            discount, addition, 0.0, "RECEIVED", payments=payments, invoice_date=gen)
+        return path
+
     def _generate_single_contractor_invoice(self, contractor_id, contractor_name,
                                              d_from, d_to, d_from_qdate, d_to_qdate, out_dir, options,
                                              job_ids=None, expense_ids=None):
@@ -486,7 +626,7 @@ class InvoicePdfMixin:
             expenses = []  # usuário desmarcou todas as despesas — nenhuma entra no invoice
         else:
             expense_query = (
-                "SELECT EXPENSE_DATE, CATEGORY, DESCRIPTION, AMOUNT FROM expenses "
+                "SELECT EXPENSE_DATE, CATEGORY, DESCRIPTION, AMOUNT, ID FROM expenses "
                 "WHERE CONTRACTOR_ID = %s AND EXPENSE_DATE BETWEEN %s AND %s"
             )
             expense_params = [contractor_id, d_from, d_to]
@@ -494,6 +634,9 @@ class InvoicePdfMixin:
                 placeholders = ", ".join(["%s"] * len(expense_ids))
                 expense_query += f" AND ID IN ({placeholders})"
                 expense_params.extend(expense_ids)
+            elif self._has_invoice_expenses_table(cursor):
+                # sem seleção manual: só as despesas que ainda não foram cobradas
+                expense_query += " AND ID NOT IN (SELECT EXPENSE_ID FROM invoice_expenses)"
             expense_query += " ORDER BY EXPENSE_DATE"
             cursor.execute(expense_query, expense_params)
             expenses = cursor.fetchall()
@@ -518,7 +661,7 @@ class InvoicePdfMixin:
 
         expenses_rows = []
         expenses_total = 0.0
-        for exp_date, category, description, amount in expenses:
+        for exp_date, category, description, amount, *_rest in expenses:
             amount = float(amount or 0)
             expenses_total += amount
             exp_date_str = exp_date.strftime("%m/%d/%Y") if isinstance(exp_date, date) else str(exp_date)
@@ -536,6 +679,7 @@ class InvoicePdfMixin:
         )
         invoice_id = cursor.lastrowid
         self._link_invoice_days(cursor, "Contractor", invoice_id, jobs)
+        self._link_invoice_expenses(cursor, "Contractor", invoice_id, [r[4] for r in expenses])
 
         # Só mostra a seção de despesas se sobrou pelo menos alguma despesa a
         # incluir (respeita o checkbox "Include Expenses" e a seleção manual).

@@ -90,9 +90,10 @@ def invoice_due_date(entity_type, generated_at, cycle_type=None, cycle_weekday=N
 
 class ReceivablesPlusMixin:
     # ═════════════════════════ dados ═════════════════════════
-    def _not_invoiced_groups(self, today=None):
+    def _not_invoiced_groups(self, today=None, date_from=None):
         """Dias já trabalhados (até hoje), com valor, não cancelados e fora de
-        qualquer invoice — agrupados por quem paga (Contractor > Company > Client)."""
+        qualquer invoice — agrupados por quem paga (Contractor > Company > Client).
+        date_from limita o início (ex.: só a semana passada)."""
         today = today or date.today()
         conn = self._get_connection()
         cur = conn.cursor()
@@ -104,12 +105,12 @@ class ReceivablesPlusMixin:
                 LEFT JOIN contractors ct ON ct.ID = wd.CONTRACTOR_ID
                 LEFT JOIN companies co ON co.ID = wd.COMPANY_ID
                 LEFT JOIN clients cl ON cl.ID = wd.CLIENT_ID
-                WHERE wd.WORK_DATE <= %s AND COALESCE(wd.STATUS, '') <> 'CANCELLED'
+                WHERE wd.WORK_DATE BETWEEN %s AND %s AND COALESCE(wd.STATUS, '') <> 'CANCELLED'
                   AND COALESCE(wd.VALUE, 0) > 0
                   AND COALESCE(wd.PAYMENT_METHOD, 'Receivable') = 'Receivable'
                   AND NOT EXISTS (SELECT 1 FROM invoice_work_days i WHERE i.WORK_DAY_ID = wd.ID)
                 ORDER BY wd.WORK_DATE, wd.ID
-            """, (today,))
+            """, (date_from or date(1900, 1, 1), today))
             rows = cur.fetchall()
         finally:
             cur.close()
@@ -372,9 +373,16 @@ class ReceivablesPlusMixin:
         self._lbl_not_invoiced_value.setText(money(total))
         if groups:
             names = ", ".join(f"{g['name']} {money(g['total'])}" for g in groups[:3])
-            self._lbl_not_invoiced_detail.setText(f"{ndays} work day(s) done but not on any invoice — {names}")
+            text = f"{ndays} work day(s) done but not on any invoice — {names}"
         else:
-            self._lbl_not_invoiced_detail.setText("Every work day is already on an invoice. ✔")
+            text = "Every work day is already on an invoice. ✔"
+        try:
+            exp_total, exp_n = self._unbilled_expenses_total() if hasattr(self, "_unbilled_expenses_total") else (0, 0)
+        except (MySQLError, RuntimeError):
+            exp_total, exp_n = 0, 0
+        if exp_n:
+            text += f"<br>+ {money(exp_total)} in {exp_n} expense(s) to reimburse, not billed yet."
+        self._lbl_not_invoiced_detail.setText(text)
         for key, lbl in self._lbl_expected.items():
             lbl.setText(money(buckets[key]))
         if overpaid:
@@ -611,7 +619,8 @@ class ReceivablesPlusMixin:
                 ("btn_invoice_action_pay", "Record payment", "circle-check", self.invoice_action_record_payment),
                 ("btn_invoice_action_email", "Send by e-mail", "send", self.invoice_action_send_email),
                 ("btn_invoice_action_pdf", "Open PDF", "file-type-pdf", self.invoice_action_open_pdf),
-                ("btn_invoice_action_reminder", "Send reminder", "alert-triangle", self.invoice_action_reminder)):
+                ("btn_invoice_action_reminder", "Send reminder", "alert-triangle", self.invoice_action_reminder),
+                ("btn_invoice_action_paid", "Paid invoice", "circle-check", self.invoice_action_paid_pdf)):
             b = QPushButton("  " + label)
             b.setObjectName(name)
             b.setIcon(tabler_icon(icon, "#37474F", 16))
@@ -706,6 +715,8 @@ class ReceivablesPlusMixin:
             paid = inv["status"].startswith(PAYMENT_STATUS_LABELS.get("RECEIVED", "Received"))
             self._invoice_action_buttons[0].setEnabled(not paid)
             self._invoice_action_buttons[3].setEnabled(not paid)
+            self._invoice_action_buttons[4].setEnabled(paid)
+            self._invoice_action_buttons[4].setToolTip("" if paid else "Only for invoices paid in full")
 
     def _invoice_context_menu(self, pos):
         t = self.ui.table_contractor_invoices
@@ -724,11 +735,14 @@ class ReceivablesPlusMixin:
         a_pdf = menu.addAction("Open PDF")
         a_rem = menu.addAction("Send reminder…")
         a_rem.setEnabled(not paid)
+        a_paid = menu.addAction("Paid invoice (PDF to send)…")
+        a_paid.setEnabled(paid)
         menu.addSeparator()
         a_det = menu.addAction("Open details…")
         chosen = menu.exec(t.viewport().mapToGlobal(pos))
         actions = {a_pay: self.invoice_action_record_payment, a_mail: self.invoice_action_send_email,
                    a_pdf: self.invoice_action_open_pdf, a_rem: self.invoice_action_reminder,
+                   a_paid: self.invoice_action_paid_pdf,
                    a_det: self.open_invoice_detail_dialog}
         if chosen in actions:
             actions[chosen]()
@@ -768,6 +782,33 @@ class ReceivablesPlusMixin:
             QMessageBox.information(self, "PDF not found",
                                     f"The PDF of invoice #{inv['id']} was not found"
                                     + (f":\n{path}" if path else "."))
+
+    def invoice_action_paid_pdf(self):
+        """Gera a invoice marcada PAID IN FULL e oferece mandar por e-mail."""
+        inv = self._selected_invoice()
+        if not inv:
+            return
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            path = self._build_paid_invoice_pdf(inv["kind"], inv["id"])
+        except Exception as e:
+            QApplication.restoreOverrideCursor()
+            logging.getLogger("vl_flooring").exception("paid invoice PDF failed")
+            QMessageBox.critical(self, "Paid invoice", f"Could not create the paid invoice:\n{e}")
+            return
+        QApplication.restoreOverrideCursor()
+        self._last_paid_pdf = path
+        info = self._invoice_partner(inv["kind"], inv["id"]) if hasattr(self, "_invoice_partner") else None
+        if info is not None and hasattr(self, "_compose_dialog"):
+            subject = f"Invoice #{inv['id']} — paid in full — {company_settings.COMPANY_NAME}"
+            body = (f"Hi {info['name'] or 'there'},\n\nThank you for your payment! Attached is invoice #{inv['id']} "
+                    f"marked PAID IN FULL ({money(info['paid'])}) for your records.\n\n"
+                    f"{company_settings.COMPANY_NAME}")
+            sent = self._compose_dialog(self, "Paid invoice", info["email"], subject, body, attachments=(path,),
+                                        note="The paid invoice was saved. Send it now?")
+            if sent:
+                return
+        QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
     def invoice_action_reminder(self):
         inv = self._selected_invoice()

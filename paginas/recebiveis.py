@@ -440,6 +440,9 @@ class ReceivablesMixin:
                 return
 
             entity_type = cmb_type.currentText()
+            if hasattr(self, "_check_duplicate_payment") and not self._check_duplicate_payment(
+                    dialog, entity_type, invoice_id, amount, date_paid.date().toString("yyyy-MM-dd")):
+                return
             is_extra = False
             if hasattr(self, "_check_overpayment"):
                 checked = self._check_overpayment(dialog, entity_type, invoice_id, amount)

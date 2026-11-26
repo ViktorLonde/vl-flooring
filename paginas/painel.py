@@ -698,7 +698,7 @@ class BoardSummaryCleanupMixin:
 
     def open_data_cleanup_dialog(self):
         dialog = QDialog(self)
-        dialog.setWindowTitle("Data cleanup")
+        dialog.setWindowTitle("Data check")
         dialog.resize(960, 600)
         layout = QVBoxLayout(dialog)
         intro = QLabel("Things in the database that need a fix. Pick the rows and use the buttons — "
@@ -904,6 +904,9 @@ class BoardSummaryCleanupMixin:
 
         pages = [("days", days_page, "Old open days"), ("clients", cl_page, "Fake clients"),
                  ("nobody", nb_page, "Jobs without a customer"), ("products", pr_page, "Products without price")]
+        extra = (self._extra_cleanup_pages(dialog, make_table, fill, selected_ids, lambda *a: run(*a))
+                 if hasattr(self, "_extra_cleanup_pages") else [])
+        pages += [(k, p, label) for k, p, label, _load in extra]
         for _k, page, label in pages:
             tabs.addTab(page, label)
         bottom = QHBoxLayout()
@@ -951,6 +954,7 @@ class BoardSummaryCleanupMixin:
                            (SELECT COUNT(DISTINCT JOB_PROJECT_ID) FROM job_materials m WHERE m.PRODUCT_ID = p.ID)
                     FROM products p WHERE COALESCE(p.PRICE, 0) = 0 ORDER BY 5 DESC, 2, 3""")
                 prods = cur.fetchall()
+                extra_counts = {k: load(cur) for k, _p, _l, load in extra}
                 cur.close()
                 conn.close()
             except (MySQLError, RuntimeError) as e:
@@ -970,7 +974,7 @@ class BoardSummaryCleanupMixin:
                 spin.setPrefix("$ ")
                 pr_t.setCellWidget(r, 4, spin)
             counts = {"days": days_t.rowCount(), "clients": cl_t.rowCount(), "nobody": nb_t.rowCount(),
-                      "products": pr_t.rowCount()}
+                      "products": pr_t.rowCount(), **extra_counts}
             for i, (key, _page, label) in enumerate(pages):
                 n = counts[key]
                 tabs.setTabText(i, f"{label} ({n})" if n else f"{label} ✓")

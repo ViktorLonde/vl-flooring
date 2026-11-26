@@ -637,6 +637,7 @@ class InvoicesMixin:
                     invoiced = dict(cursor.fetchall())
 
                 expense_rows = []
+                expenses_invoiced = {}
                 if bill_to == "Contractor":
                     cursor.execute(
                         "SELECT e.ID, e.EXPENSE_DATE, c.ID, e.DESCRIPTION, e.AMOUNT, "
@@ -647,6 +648,12 @@ class InvoicesMixin:
                         (d_from, d_to),
                     )
                     expense_rows = cursor.fetchall()
+                    if expense_rows and self._has_invoice_expenses_table(cursor):
+                        eids = [r[0] for r in expense_rows]
+                        cursor.execute(
+                            "SELECT EXPENSE_ID, INVOICE_ID FROM invoice_expenses WHERE EXPENSE_ID IN ("
+                            + ",".join(["%s"] * len(eids)) + ")", eids)
+                        expenses_invoiced = dict(cursor.fetchall())
 
                 cursor.close()
                 conn.close()
@@ -663,14 +670,15 @@ class InvoicesMixin:
             for row_idx, (expense_id, exp_date, entity_id, description, amount, entity_name) in enumerate(expense_rows):
                 chk_item = QTableWidgetItem()
                 chk_item.setFlags((chk_item.flags() | Qt.ItemFlag.ItemIsUserCheckable) & ~Qt.ItemFlag.ItemIsEditable)
-                # vindo do "Not invoiced yet": despesas começam desmarcadas (não há
-                # registro de quais já foram reembolsadas — marque só as novas)
-                chk_item.setCheckState(Qt.CheckState.Unchecked if prefill_day_ids else Qt.CheckState.Checked)
+                # despesa já cobrada em outra invoice começa desmarcada (invoice_expenses)
+                exp_already = expenses_invoiced.get(expense_id)
+                chk_item.setCheckState(Qt.CheckState.Unchecked if exp_already else Qt.CheckState.Checked)
                 chk_item.setData(Qt.ItemDataRole.UserRole, float(amount or 0))
                 table_expenses_select.setItem(row_idx, 0, chk_item)
 
                 exp_date_str = exp_date.strftime("%m/%d/%Y") if isinstance(exp_date, date) else str(exp_date)
-                exp_values = [exp_date_str, str(description or ""), f"${float(amount or 0):,.2f}"]
+                desc = str(description or "") + (f"  (invoiced #{exp_already})" if exp_already else "")
+                exp_values = [exp_date_str, desc, f"${float(amount or 0):,.2f}"]
                 for c, text in enumerate(exp_values, start=1):
                     item = QTableWidgetItem(text)
                     item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -1511,6 +1519,9 @@ class InvoicesMixin:
                 QMessageBox.warning(dialog, "Invalid amount", "Enter a payment amount greater than zero.")
                 return
 
+            if hasattr(self, "_check_duplicate_payment") and not self._check_duplicate_payment(
+                    dialog, entity_type, invoice_id, amount, date_paid.date().toString("yyyy-MM-dd")):
+                return
             is_extra = False
             if hasattr(self, "_check_overpayment"):
                 checked = self._check_overpayment(dialog, entity_type, invoice_id, amount)
@@ -1631,6 +1642,8 @@ class InvoicesMixin:
                 cursor.execute(f"DELETE FROM {table_name} WHERE ID = %s", (invoice_id,))
                 try:
                     cursor.execute("DELETE FROM invoice_work_days WHERE INVOICE_TYPE = %s AND INVOICE_ID = %s",
+                                   (entity_type, invoice_id))
+                    cursor.execute("DELETE FROM invoice_expenses WHERE INVOICE_TYPE = %s AND INVOICE_ID = %s",
                                    (entity_type, invoice_id))
                 except MySQLError:
                     pass
