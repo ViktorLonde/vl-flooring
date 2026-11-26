@@ -85,7 +85,6 @@ class SessionMixin:
         s.setValue("window/maximized", self.isMaximized())
         s.setValue("ui/last_page", self.ui.Pages.currentIndex())
         s.setValue("ui/receivables_tab", self.ui.tabWidget_receivables.currentIndex())
-        s.setValue("ui/jobs_tab", self.ui.tabWidget_jobs.currentIndex())
 
     def restore_ui_state(self):
         """Chamado depois do login. Sempre abre na Home (pedido do Viktor em
@@ -100,9 +99,8 @@ class SessionMixin:
         tab = s.value("ui/receivables_tab", 0, type=int)
         if 0 <= tab < self.ui.tabWidget_receivables.count() and self.ui.tabWidget_receivables.isTabVisible(tab):
             self.ui.tabWidget_receivables.setCurrentIndex(tab)
-        jobs_tab = s.value("ui/jobs_tab", 0, type=int)
-        if 0 <= jobs_tab < self.ui.tabWidget_jobs.count():
-            self.ui.tabWidget_jobs.setCurrentIndex(jobs_tab)
+        # Job Records sempre abre no Schedule (primeira aba)
+        self.ui.tabWidget_jobs.setCurrentWidget(self.ui.tab_schedule)
         return s.value("window/maximized", True, type=bool) or geometry is None
 
     # ── precisa de atenção ────────────────────────────────────────────

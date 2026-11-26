@@ -37,6 +37,10 @@ main, login = appmod._session["main"], appmod._session["login"]
 login.login_successful.emit("viktorlonde"); a.processEvents()
 check("login opens main window", main.isVisible() and main._current_username == "viktorlonde")
 check("always opens on Home (since 2026-11-20)", main.ui.Pages.currentIndex() == 0, main.ui.Pages.currentIndex())
+tw = main.ui.tabWidget_jobs
+check("Job Records: Schedule is the first tab and opens first",
+      tw.widget(0) is main.ui.tab_schedule and tw.currentWidget() is main.ui.tab_schedule,
+      [tw.tabText(i) for i in range(tw.count())])
 
 layout = main.ui.layout_home_revenue_chart
 check("revenue chart has 6 months", layout.count() in (1, 6), layout.count())

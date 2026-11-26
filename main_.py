@@ -690,6 +690,11 @@ class MainWindow(
         self.ui.cmb_job_code.lineEdit().editingFinished.connect(self._on_job_code_editing_finished)
         self.ui.btn_add_material.clicked.connect(self.add_job_material)
         self.ui.btn_remove_material.clicked.connect(self.remove_job_material)
+        # Schedule é a primeira aba de Job Records (pedido do Viktor, 25/11/2026)
+        bar = self.ui.tabWidget_jobs.tabBar()
+        bar.moveTab(self.ui.tabWidget_jobs.indexOf(self.ui.tab_schedule), 0)
+        self.ui.tabWidget_jobs.setCurrentWidget(self.ui.tab_schedule)
+        self._previous_job_tab_index = self.ui.tabWidget_jobs.currentIndex()
         self.ui.tabWidget_jobs.currentChanged.connect(self._on_job_tab_changed)
 
         # Job Records — Schedule
