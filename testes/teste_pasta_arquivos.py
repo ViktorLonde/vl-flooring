@@ -130,7 +130,7 @@ finally:
     shutil.rmtree(tmp, ignore_errors=True)
 
 # ── app: bloco Files folder em Settings → System ──
-from PySide6.QtWidgets import QApplication, QMessageBox, QGroupBox
+from PySide6.QtWidgets import QApplication, QMessageBox, QLabel
 QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.StandardButton.No)
 import app as appmod
 from paginas.visual import install_icon_theme
@@ -142,9 +142,11 @@ main, login = appmod._session["main"], appmod._session["login"]
 login.login_successful.emit("viktorlonde"); a.processEvents()
 tabs = main.ui.tabs_settings
 system = tabs.widget(tabs.count() - 1)
-boxes = [b.title() for b in system.findChildren(QGroupBox)]
+boxes = [l.text() for l in system.findChildren(QLabel) if l.text() in ('Files folder', 'Database backup')]
 check("Settings → System has 'Files folder'", "Files folder" in boxes, boxes)
-check("label shows the current folder", arquivos.files_root() in main._lbl_files_root.text())
+check("label shows the current folder", arquivos.files_root() == main._txt_files_root.text())
+tabs.setCurrentIndex(tabs.count() - 1); main.resize(1400, 800); main.show(); a.processEvents()
+system.grab().save(os.path.join(os.environ.get('TEMP', '.'), 'system_tab.png'))
 check("files folder exists after start", os.path.isdir(os.path.join(arquivos.files_root(), "Invoices")))
 main._closing_for_sign_out = True; main.close(); login.close()
 print("RESULT:", "ALL OK" if ok else "FAILED", flush=True)

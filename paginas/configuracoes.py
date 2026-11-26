@@ -389,9 +389,12 @@ class SettingsMixin:
         ]), "Email")
         system_widgets = [self._files_folder_box()]
         if restore_btn is not None:
-            system_widgets += [note("Bring the database back to how it was on an earlier day. "
-                                    "A backup of the current data is made first, so it can be undone."),
-                               restore_btn]
+            restore_btn.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+            system_widgets.append(self._settings_card(
+                "Database backup",
+                "Bring the database back to how it was on an earlier day. "
+                "A backup of the current data is made first, so it can be undone.",
+                [], [restore_btn]))
         tabs.addTab(make_tab(system_widgets), "System")
         ui.tabs_settings = tabs
 
@@ -403,39 +406,72 @@ class SettingsMixin:
         tabs.currentChanged.connect(lambda i: ui.btn_settings_save.setVisible(i != system_index))
 
     # ── pasta de arquivos (invoices, fotos, recibos…) ─────────────────
+    def _settings_card(self, title, description, body_widgets, buttons):
+        """Cartão da aba System: título, explicação, conteúdo e botões numa linha."""
+        card = QFrame()
+        card.setObjectName("settings_card")
+        card.setStyleSheet("QFrame#settings_card { border: 1px solid rgba(127,127,127,0.30); border-radius: 8px; }")
+        v = QVBoxLayout(card)
+        v.setContentsMargins(18, 14, 18, 16)
+        v.setSpacing(8)
+        lbl_title = QLabel(title)
+        lbl_title.setStyleSheet("font-size: 15px; font-weight: 600; border: none;")
+        v.addWidget(lbl_title)
+        lbl_desc = QLabel(description)
+        lbl_desc.setWordWrap(True)
+        lbl_desc.setStyleSheet("color:#8A9AB0; border: none;")
+        v.addWidget(lbl_desc)
+        for w in body_widgets:
+            v.addWidget(w)
+        if buttons:
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            row.setContentsMargins(0, 6, 0, 0)
+            for b in buttons:
+                row.addWidget(b)
+            row.addStretch(1)
+            v.addLayout(row)
+        return card
+
     def _files_folder_box(self):
-        box = QGroupBox("Files folder")
-        v = QVBoxLayout(box)
-        self._lbl_files_root = QLabel()
-        self._lbl_files_root.setWordWrap(True)
-        self._lbl_files_root.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        v.addWidget(self._lbl_files_root)
-        row = QHBoxLayout()
+        from paginas.visual import tabler_icon
+        self._txt_files_root = QLineEdit()
+        self._txt_files_root.setReadOnly(True)
+        self._txt_files_root.setMinimumHeight(34)
+        self._lbl_files_status = QLabel()
+        self._lbl_files_status.setWordWrap(True)
+        self._lbl_files_status.setStyleSheet("border: none;")
         btn_open = QPushButton("  Open files folder")
+        btn_open.setIcon(tabler_icon("folder-open", "#4FA3FF", 16))
         btn_change = QPushButton("  Change location…")
+        btn_change.setIcon(tabler_icon("pencil", "#8A9AB0", 16))
         btn_move = QPushButton("  Move old files here")
-        for b in (btn_open, btn_change, btn_move):
-            row.addWidget(b)
-        row.addStretch(1)
-        v.addLayout(row)
+        btn_move.setIcon(tabler_icon("arrows-exchange", "#8A9AB0", 16))
         btn_open.clicked.connect(self.open_files_folder)
         btn_change.clicked.connect(self.change_files_folder)
         btn_move.clicked.connect(lambda: self.move_old_files(ask=True))
+        subs = ", ".join(arquivos.SUBFOLDERS.values())
+        card = self._settings_card(
+            "Files folder",
+            "Invoices and estimates are saved here automatically, together with job photos and receipts. "
+            f"Subfolders: {subs}.",
+            [self._txt_files_root, self._lbl_files_status], [btn_open, btn_change, btn_move])
         self._refresh_files_folder_label()
-        return box
+        return card
 
     def _refresh_files_folder_label(self):
-        lbl = getattr(self, "_lbl_files_root", None)
-        if lbl is None:
+        txt = getattr(self, "_txt_files_root", None)
+        if txt is None:
             return
         root = arquivos.files_root()
-        where = ("<span style='color:#2E7D32'>Inside Google Drive — saved in the cloud.</span>"
-                 if arquivos.using_google_drive(root) else
-                 "<span style='color:#E65100'>To keep a copy in the cloud: in Google Drive for desktop open "
-                 "Preferences → <b>Folders from my computer</b> → Add folder, and choose this folder.</span>")
-        subs = ", ".join(arquivos.SUBFOLDERS.values())
-        lbl.setText(f"<b>{root}</b><br>{where}<br><span style='color:#6B7C93'>Invoices and estimates are "
-                    f"saved here automatically, with job photos and receipts. Subfolders: {subs}.</span>")
+        txt.setText(root)
+        if arquivos.using_google_drive(root):
+            status = "<span style='color:#43A047'>✔ Inside Google Drive — saved in the cloud.</span>"
+        else:
+            status = ("<span style='color:#F57C00'>⚠ Not backed up yet.</span> "
+                      "<span style='color:#8A9AB0'>In Google Drive for desktop: Preferences → "
+                      "<b>Folders from my computer</b> → Add folder → choose this folder.</span>")
+        self._lbl_files_status.setText(status)
 
     def open_files_folder(self):
         root = arquivos.ensure_structure()
