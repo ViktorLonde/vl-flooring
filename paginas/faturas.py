@@ -7,6 +7,7 @@ Métodos da MainWindow (mixin) — veja main_.py.
 
 from app_common import *  # noqa: F401,F403
 import arquivos
+from paginas.recebiveis_plus import invoice_due_date
 
 
 class InvoicesMixin:
@@ -211,10 +212,14 @@ class InvoicesMixin:
         btn_send.clicked.connect(send_all)
         dialog.exec()
 
-    def open_generate_invoices_dialog(self, prefill_job_code=None):
+    def open_generate_invoices_dialog(self, prefill_job_code=None, prefill_bill_to=None, prefill_entity_id=None,
+                                      prefill_from=None, prefill_to=None, prefill_day_ids=None):
         """Abre uma janela pra escolher o tipo (Contractor/Company/Client), o período,
         quem vai receber, e as opções de exibição (agrupar por data, mostrar quantidade)
-        e ajustes (desconto/acréscimo/taxa), e gera um PDF de invoice pra cada um."""
+        e ajustes (desconto/acréscimo/taxa), e gera um PDF de invoice pra cada um.
+        prefill_*: vem do card "Not invoiced yet" — abre com tipo, período, pagador
+        e só os dias informados marcados. Dias que já estão em alguma invoice
+        aparecem desmarcados com "(invoiced #N)" para não cobrar duas vezes."""
         if not REPORTLAB_AVAILABLE:
             QMessageBox.critical(
                 self, "Missing Dependency",
@@ -623,6 +628,13 @@ class InvoicesMixin:
                 params = [d_from, d_to] + ([job_code_filter] if job_code_filter else [])
                 cursor.execute(query, params)
                 rows = cursor.fetchall()
+                invoiced = {}
+                if rows:
+                    ids = [r[0] for r in rows]
+                    cursor.execute(
+                        "SELECT WORK_DAY_ID, MIN(INVOICE_ID) FROM invoice_work_days WHERE WORK_DAY_ID IN ("
+                        + ",".join(["%s"] * len(ids)) + ") GROUP BY WORK_DAY_ID", ids)
+                    invoiced = dict(cursor.fetchall())
 
                 expense_rows = []
                 if bill_to == "Contractor":
@@ -651,7 +663,9 @@ class InvoicesMixin:
             for row_idx, (expense_id, exp_date, entity_id, description, amount, entity_name) in enumerate(expense_rows):
                 chk_item = QTableWidgetItem()
                 chk_item.setFlags((chk_item.flags() | Qt.ItemFlag.ItemIsUserCheckable) & ~Qt.ItemFlag.ItemIsEditable)
-                chk_item.setCheckState(Qt.CheckState.Checked)
+                # vindo do "Not invoiced yet": despesas começam desmarcadas (não há
+                # registro de quais já foram reembolsadas — marque só as novas)
+                chk_item.setCheckState(Qt.CheckState.Unchecked if prefill_day_ids else Qt.CheckState.Checked)
                 chk_item.setData(Qt.ItemDataRole.UserRole, float(amount or 0))
                 table_expenses_select.setItem(row_idx, 0, chk_item)
 
@@ -673,12 +687,15 @@ class InvoicesMixin:
             for row_idx, (job_id, work_date, entity_id, entity_name, address, value) in enumerate(rows):
                 chk_item = QTableWidgetItem()
                 chk_item.setFlags((chk_item.flags() | Qt.ItemFlag.ItemIsUserCheckable) & ~Qt.ItemFlag.ItemIsEditable)
-                chk_item.setCheckState(Qt.CheckState.Checked)
+                already = invoiced.get(job_id)
+                wanted = (job_id in prefill_day_ids) if prefill_day_ids else not already
+                chk_item.setCheckState(Qt.CheckState.Checked if wanted else Qt.CheckState.Unchecked)
                 chk_item.setData(Qt.ItemDataRole.UserRole, float(value or 0))
                 table_jobs_select.setItem(row_idx, 0, chk_item)
 
                 date_str = work_date.strftime("%m/%d/%Y") if isinstance(work_date, date) else str(work_date)
-                values = [date_str, str(address or ""), f"${float(value or 0):,.2f}"]
+                addr = str(address or "") + (f"  (invoiced #{already})" if already else "")
+                values = [date_str, addr, f"${float(value or 0):,.2f}"]
                 for c, text in enumerate(values, start=1):
                     item = QTableWidgetItem(text)
                     item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -920,8 +937,21 @@ class InvoicesMixin:
         if prefill_job_code:
             txt_job_code_filter.setText(prefill_job_code)
             _autofill_dates_from_job_code()
+        if prefill_from and prefill_to:
+            date_from.setDate(QDate(prefill_from.year, prefill_from.month, prefill_from.day))
+            date_to.setDate(QDate(prefill_to.year, prefill_to.month, prefill_to.day))
+        if prefill_bill_to and cmb_bill_to.currentText() != prefill_bill_to:
+            cmb_bill_to.blockSignals(True)
+            cmb_bill_to.setCurrentText(prefill_bill_to)
+            cmb_bill_to.blockSignals(False)
 
         find_entities()  # já carrega ao abrir, usando o período padrão (mês atual) e tipo Contractor
+        if prefill_entity_id is not None:
+            # só o pagador escolhido fica marcado; os dias dele seguem prefill_day_ids
+            for entity_id, _name, chk in entity_checkboxes:
+                if entity_id != prefill_entity_id:
+                    chk.setChecked(False)
+            update_status_label()
         dialog.exec()
 
     def load_contractor_invoices(self):
@@ -975,6 +1005,7 @@ class InvoicesMixin:
 
         # Guarda os metadados de cada invoice (entidade, pdf) pra usar depois no envio em lote
         self._invoice_row_meta = {}
+        due_info, overdue_ids = {}, set()
 
         status_bg = {
             "PENDING": QColor("#FFF3E0"), "PARTIAL": QColor("#E3F2FD"), "RECEIVED": QColor("#E8F5E9"),
@@ -989,13 +1020,20 @@ class InvoicesMixin:
                  jobs_total, expenses_total, total_amount, amount_paid, status,
                  generated_at, pdf_path, entity_id,
                  cycle_type, cycle_weekday, cycle_days) = row_data
-                is_overdue = status in ("PENDING", "PARTIAL") and self._is_contractor_invoice_overdue(
-                    generated_at, cycle_type or "CUSTOM_DAYS", cycle_weekday, cycle_days or 30)
             else:
                 (invoice_id, entity_name, period_from, period_to,
                  jobs_total, expenses_total, total_amount, amount_paid, status,
                  generated_at, pdf_path, entity_id) = row_data
-                is_overdue = False
+                cycle_type = cycle_weekday = cycle_days = None
+            # vencimento: ciclo do contractor; Company/Client = 30 dias
+            due = invoice_due_date(entity_type, generated_at, cycle_type, cycle_weekday, cycle_days)
+            is_overdue = status in ("PENDING", "PARTIAL") and due is not None and date.today() > due
+            if status in ("PENDING", "PARTIAL") and due is not None:
+                late = (date.today() - due).days
+                due_info[invoice_id] = (f"{late} day{'s' if late != 1 else ''} late" if late > 0
+                                        else ("due today" if late == 0 else f"due {due:%m/%d}"))
+            if is_overdue:
+                overdue_ids.add(invoice_id)
 
             self._invoice_row_meta[invoice_id] = {
                 "entity_type": entity_type,
@@ -1043,19 +1081,21 @@ class InvoicesMixin:
             table.setItem(row_idx, 8, chk_item)
 
         table.setSortingEnabled(True)
+        if hasattr(self, "_decorate_invoice_rows"):
+            self._decorate_invoice_rows(overdue_ids, due_info)
 
-    def open_invoice_detail_dialog(self):
+    def open_invoice_detail_dialog(self, *_args, invoice_id=None, entity_type=None):
         """Abre um pop-up com os detalhes do invoice selecionado (Contractor,
         Company ou Client, conforme o filtro atual): histórico de pagamentos
         recebidos (quem, quando, quanto, como) e opção de registrar um novo
         pagamento, além de status/nota manuais e reabrir o PDF."""
-        table = self.ui.table_contractor_invoices
-        selected = table.currentRow()
-        if selected < 0:
-            return
-
-        invoice_id = int(table.item(selected, 0).text())
-        entity_type = self.ui.cmb_invoice_entity_type.currentText() or "Contractor"
+        if invoice_id is None:
+            table = self.ui.table_contractor_invoices
+            selected = table.currentRow()
+            if selected < 0:
+                return
+            invoice_id = int(table.item(selected, 0).text())
+        entity_type = entity_type or self.ui.cmb_invoice_entity_type.currentText() or "Contractor"
 
         table_name, ref_table, fk_col, name_col = {
             "Contractor": ("contractor_invoices", "contractors", "CONTRACTOR_ID", "COALESCE(r.COMPANY_NAME, r.FULL_NAME)"),
@@ -1471,6 +1511,13 @@ class InvoicesMixin:
                 QMessageBox.warning(dialog, "Invalid amount", "Enter a payment amount greater than zero.")
                 return
 
+            is_extra = False
+            if hasattr(self, "_check_overpayment"):
+                checked = self._check_overpayment(dialog, entity_type, invoice_id, amount)
+                if checked is None:
+                    return
+                amount, is_extra = checked
+
             paid_date_str = date_paid.date().toString("yyyy-MM-dd")
             method = cmb_method.currentText()
             note = txt_payment_note.text().strip() or None
@@ -1499,6 +1546,8 @@ class InvoicesMixin:
                 conn3.commit()
                 cur3.close()
                 conn3.close()
+                if is_extra:
+                    self._mark_invoice_extra(entity_type, invoice_id)
             except (MySQLError, RuntimeError) as e:
                 QMessageBox.critical(dialog, "Database Error", f"Could not record payment:\n{e}")
                 return

@@ -753,7 +753,9 @@ class OperationsMixin:
         row.addWidget(btn)
         self.ui.layout_receivables_invoices.insertLayout(0, row)
 
-    def _overdue_invoices(self):
+    def _overdue_invoices(self, only=None):
+        """Invoices abertas há mais de 30 dias; only=(tipo, id) devolve só
+        aquela invoice (aberta), mesmo que ainda não tenha 30 dias."""
         sources = [
             ("Contractor", "contractor_invoices", "CONTRACTOR_ID", "contractors",
              "COALESCE(NULLIF(p.COMPANY_NAME, ''), p.FULL_NAME)", "COALESCE(NULLIF(p.COMPANY_EMAIL, ''), p.EMAIL)"),
@@ -764,13 +766,16 @@ class OperationsMixin:
         conn = self._get_connection()
         cur = conn.cursor()
         for kind, table, fk, partner, name_sql, email_sql in sources:
+            if only and only[0] != kind:
+                continue
+            where = "i.ID = %s" if only else "DATEDIFF(CURDATE(), i.GENERATED_AT) > 30"
             cur.execute(f"""
                 SELECT i.ID, {name_sql}, {email_sql}, i.GENERATED_AT, COALESCE(i.TOTAL_AMOUNT, 0),
                        COALESCE(i.AMOUNT_PAID, 0), i.PDF_PATH, DATEDIFF(CURDATE(), i.GENERATED_AT)
                 FROM {table} i LEFT JOIN {partner} p ON p.ID = i.{fk}
-                WHERE i.STATUS IN ('PENDING', 'PARTIAL') AND DATEDIFF(CURDATE(), i.GENERATED_AT) > 30
+                WHERE i.STATUS IN ('PENDING', 'PARTIAL') AND {where}
                 ORDER BY i.GENERATED_AT
-            """)
+            """, (only[1],) if only else ())
             for iid, name, email, gen, total, paid, pdf, days in cur.fetchall():
                 result.append({"kind": kind, "id": iid, "name": name or "", "email": (email or "").strip(),
                                "date": gen, "open": float(total) - float(paid), "pdf": pdf, "days": days})
@@ -784,14 +789,16 @@ class OperationsMixin:
         pw = (company_settings.EMAIL_SMTP_PASSWORD or "").strip()
         return bool(user) and "your-email" not in user and bool(pw) and pw != "your-app-password"
 
-    def open_reminders_dialog(self):
+    def open_reminders_dialog(self, *_args, only=None):
         try:
-            invoices = self._overdue_invoices()
+            invoices = self._overdue_invoices(only=only)
         except (MySQLError, RuntimeError) as e:
             QMessageBox.critical(self, "Database Error", f"Could not load the invoices:\n{e}")
             return
         if not invoices:
-            QMessageBox.information(self, "No overdue invoices", "No invoice is open for more than 30 days.")
+            QMessageBox.information(self, "No overdue invoices",
+                                    "This invoice is already paid." if only else
+                                    "No invoice is open for more than 30 days.")
             return
         dialog = QDialog(self)
         dialog.setWindowTitle("Payment reminders")

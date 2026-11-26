@@ -87,15 +87,15 @@ class ReceivablesMixin:
             ]
 
             for label, table, ref_table, fk_col, name_col in entity_tables:
-                # Totais gerais (respeitando o filtro de periodo)
+                # Totais gerais: sempre o que está em aberto AGORA (o filtro de
+                # período vale só para a tabela de detalhamento e formas de pagamento)
                 cursor.execute(
                     f"""
                     SELECT COALESCE(SUM(TOTAL_AMOUNT - AMOUNT_PAID), 0),
                            COUNT(DISTINCT {fk_col})
                     FROM {table}
-                    WHERE STATUS IN ('PENDING','PARTIAL') {period_clause}
-                    """,
-                    period_params,
+                    WHERE STATUS IN ('PENDING','PARTIAL')
+                    """
                 )
                 pending_sum, open_count = cursor.fetchone()
                 total_receivable += float(pending_sum or 0)
@@ -255,6 +255,8 @@ class ReceivablesMixin:
                 debtors_table.setItem(r, c, item)
 
         self._draw_dashboard_received_chart(received_by_month)
+        if hasattr(self, "_refresh_receivables_extra"):
+            self._refresh_receivables_extra()
 
     def _draw_dashboard_received_chart(self, received_by_month):
         """Desenha o gráfico de barras de valores recebidos por mês (últimos
@@ -299,10 +301,11 @@ class ReceivablesMixin:
 
             layout.addLayout(col)
 
-    def open_record_payment_dialog(self):
+    def open_record_payment_dialog(self, *_args, preselect=None):
         """Atalho do Dashboard: acha um invoice em aberto (Contractor/Company/
         Client) e registra um pagamento nele, sem precisar navegar até a
-        lista de Invoices primeiro."""
+        lista de Invoices primeiro. preselect=(tipo, id) já deixa a invoice
+        escolhida (ação "Record payment" da lista de Invoices)."""
         dialog = QDialog(self)
         dialog.setWindowTitle("Record Payment")
         dialog.resize(480, 480)
@@ -437,6 +440,12 @@ class ReceivablesMixin:
                 return
 
             entity_type = cmb_type.currentText()
+            is_extra = False
+            if hasattr(self, "_check_overpayment"):
+                checked = self._check_overpayment(dialog, entity_type, invoice_id, amount)
+                if checked is None:
+                    return
+                amount, is_extra = checked
             try:
                 conn = self._get_connection()
                 cursor = conn.cursor()
@@ -462,6 +471,8 @@ class ReceivablesMixin:
                 conn.commit()
                 cursor.close()
                 conn.close()
+                if is_extra:
+                    self._mark_invoice_extra(entity_type, invoice_id)
             except (MySQLError, RuntimeError) as e:
                 QMessageBox.critical(dialog, "Database Error", f"Could not record payment:\n{e}")
                 return
@@ -479,4 +490,12 @@ class ReceivablesMixin:
         btn_record.clicked.connect(record_payment)
 
         refresh_list()
+        if preselect:
+            kind, wanted_id = preselect
+            if cmb_type.currentText() != kind:
+                cmb_type.setCurrentText(kind)  # recarrega a lista pelo sinal
+            for i in range(list_invoices.count()):
+                if list_invoices.item(i).text().startswith(f"#{wanted_id} —"):
+                    list_invoices.setCurrentRow(i)
+                    break
         dialog.exec()

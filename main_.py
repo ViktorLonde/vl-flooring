@@ -29,6 +29,7 @@ from paginas.usuarios import UsersMixin
 from paginas.despesas import ExpensesMixin
 from paginas.permissoes import PermissionsMixin
 from paginas.visual import VisualMixin, SIDEBAR_ITEMS
+from paginas.recebiveis_plus import ReceivablesPlusMixin
 from paginas.moderno import ModernMixin
 from paginas.tema import ThemeMixin
 from paginas.sessao import SessionMixin
@@ -55,6 +56,7 @@ from PySide6.QtCore import Signal
 
 
 class MainWindow(
+    ReceivablesPlusMixin,
     WorkInboxMixin,
     CustomerEmailsMixin,
     FinanceInsightsMixin,
@@ -166,6 +168,7 @@ class MainWindow(
         self._refresh_material_product_combo()
         self._setup_work_inboxes()
         self._setup_finance_tools()
+        self._setup_receivables_plus()
         self._setup_after_job_tools()
         self._setup_registrations_hub()
         self._setup_icon_theme()
