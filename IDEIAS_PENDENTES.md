@@ -1,3 +1,16 @@
+# Ideias para depois (salvas em 26/11/2026 — o Viktor pediu para fazer mais tarde)
+
+1. **Quanto devo a cada helper** — conta por helper (dias, valor/dia, pago, falta), botão Pay que registra e manda o comprovante da semana (e-mail/WhatsApp); acerta o 1099 dos helpers. Hoje HELPER_PAY fica $0 na maioria dos dias.
+2. **Preço dos materiais** — 32 produtos com $0: ao receber foto de recibo (Material/Receipt Inbox) oferecer gravar o preço; modo rápido "preencher preços" com o último preço pago.
+3. **Conferência do valor do dia** — avisar quando o valor do dia não bate com Service Rate × fração (ex.: $0 em dia inteiro, $250 em meio dia).
+4. **Despesas fixas automáticas** — seguro da van, celular etc. lançados todo mês.
+5. **Lucro real por job** — juntar helpers + material + despesas + quilometragem; lucro por Job Code e por dia.
+6. **Limpeza rápida** — botão "arrumar o que é seguro" no Data check (63 dias antigos abertos, 7 clientes "— Select —", 4 Job Codes sem dados).
+
+Sugestão: começar pela 1 e pela 3.
+
+---
+
 # ✅ FEITO em 21/11/2026 — todas as ideias abaixo foram implementadas
 
 - Registrations → **Work Day Inbox**, **Material Inbox**, **Customer Statements**, **Price per SF**,

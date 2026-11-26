@@ -31,6 +31,8 @@ from paginas.permissoes import PermissionsMixin
 from paginas.visual import VisualMixin, SIDEBAR_ITEMS
 from paginas.recebiveis_plus import ReceivablesPlusMixin
 from paginas.controle import ControlMixin
+from paginas.particulares import PrivateProjectsMixin
+from paginas.ordem_tab import TabOrderMixin
 from paginas.moderno import ModernMixin
 from paginas.tema import ThemeMixin
 from paginas.sessao import SessionMixin
@@ -57,6 +59,8 @@ from PySide6.QtCore import Signal
 
 
 class MainWindow(
+    TabOrderMixin,
+    PrivateProjectsMixin,
     ControlMixin,
     ReceivablesPlusMixin,
     WorkInboxMixin,
@@ -171,6 +175,7 @@ class MainWindow(
         self._setup_work_inboxes()
         self._setup_finance_tools()
         self._setup_receivables_plus()
+        self._setup_private_projects()
         self._setup_after_job_tools()
         self._setup_registrations_hub()
         self._setup_icon_theme()
@@ -181,6 +186,7 @@ class MainWindow(
         self._setup_restore_backup_button()
         self._setup_settings_tabs()
         self._check_files_folder_on_start()
+        self._setup_tab_order()
         self._setup_dashboard_period_filter()
         self._setup_pnl_period_filter()
         self._setup_1099_year_filter()
@@ -850,6 +856,9 @@ class MainWindow(
         sub_buttons = (self.ui.btn_reg_companies, self.ui.btn_reg_contractors,
                        self.ui.btn_reg_work_types, self.ui.btn_reg_products)
 
+        projects_btn = getattr(self.ui, "btn_projects", None)
+        if projects_btn is not None:
+            top_level_buttons = top_level_buttons + (projects_btn,)
         for btn in top_level_buttons:
             btn.setChecked(btn is active_btn)
         for btn in sub_buttons:
@@ -864,10 +873,15 @@ class MainWindow(
             4: "Work Types", 5: "Receivables", 6: "Customer", 7: "User", 8: "Products",
             9: "Settings", hub_index: "Registrations",
         }
+        projects_index = getattr(self, "_projects_index", -2)
+        titles[projects_index] = "Projects"
         self.ui.Top_label.setText(titles.get(index, ""))
 
         if index == hub_index:
             self.refresh_registrations_hub()
+
+        if index == projects_index:
+            self.load_projects_page()
 
         if index == 9:
             self.load_settings_form()

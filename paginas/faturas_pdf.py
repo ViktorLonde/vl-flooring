@@ -539,6 +539,10 @@ class InvoicePdfMixin:
         FULL e os pagamentos recebidos) na pasta de arquivos, em Invoices/<ano>.
         Devolve o caminho do PDF."""
         import arquivos
+        if hasattr(self, "_paid_project_invoice_pdf"):
+            project_pdf = self._paid_project_invoice_pdf(kind, invoice_id)
+            if project_pdf:
+                return project_pdf
         table, ref, fk, name_sql, ptable, pfk, pname = self._PAID_KIND[kind]
         conn = self._get_connection()
         cursor = conn.cursor()

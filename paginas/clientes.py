@@ -278,6 +278,29 @@ class CustomersMixin:
                     data + (self._current_customer_id,),
                 )
             else:
+                # cliente com o mesmo nome (ou mesmo e-mail / telefone) já existe? pergunta antes de repetir
+                phone_digits = "".join(ch for ch in (data[2] or "") if ch.isdigit())
+                if len(phone_digits) < 7 or set(phone_digits) == {"0"}:
+                    phone_digits = ""
+                email = (data[1] or "").strip().lower()
+                cursor.execute(
+                    "SELECT ID, FULL_NAME FROM clients WHERE LOWER(TRIM(FULL_NAME)) = %s "
+                    "OR (%s <> '' AND LOWER(TRIM(EMAIL)) = %s) "
+                    "OR (%s <> '' AND REGEXP_REPLACE(COALESCE(PHONE_NUMBER, ''), '[^0-9]', '') = %s) "
+                    "ORDER BY ID LIMIT 1",
+                    (" ".join(name.split()).lower(), email, email, phone_digits, phone_digits))
+                same = cursor.fetchone()
+                if same:
+                    answer = QMessageBox.question(
+                        self, "Customer already exists",
+                        f"“{same[1]}” (#{same[0]}) is already registered with the same name, e-mail or phone.\n\n"
+                        f"Create another customer anyway?",
+                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                        QMessageBox.StandardButton.No)
+                    if answer != QMessageBox.StandardButton.Yes:
+                        cursor.close()
+                        conn.close()
+                        return
                 cursor.execute(
                     "INSERT INTO clients (FULL_NAME, EMAIL, PHONE_NUMBER, PHONE_NUMBER2, ADDRESS, "
                     "ADDRESS2, CITY_ID, STATE_ID, ZIP_CODE) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",

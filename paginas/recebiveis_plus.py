@@ -105,7 +105,9 @@ class ReceivablesPlusMixin:
                 LEFT JOIN contractors ct ON ct.ID = wd.CONTRACTOR_ID
                 LEFT JOIN companies co ON co.ID = wd.COMPANY_ID
                 LEFT JOIN clients cl ON cl.ID = wd.CLIENT_ID
+                LEFT JOIN job_projects jpx ON jpx.ID = wd.JOB_PROJECT_ID
                 WHERE wd.WORK_DATE BETWEEN %s AND %s AND COALESCE(wd.STATUS, '') <> 'CANCELLED'
+                  AND COALESCE(jpx.PROJECT_TYPE, 'DAY_WORK') <> 'PRIVATE'
                   AND COALESCE(wd.VALUE, 0) > 0
                   AND COALESCE(wd.PAYMENT_METHOD, 'Receivable') = 'Receivable'
                   AND NOT EXISTS (SELECT 1 FROM invoice_work_days i WHERE i.WORK_DAY_ID = wd.ID)
